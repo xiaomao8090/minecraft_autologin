@@ -7,17 +7,33 @@
     <link rel="stylesheet" href="css/user.css">
 </head>
 <body>
-    <div class="container">
-        <div class="count-display">
-            <span class="label">剩余账号</span>
-            <span class="count" id="accountCount">-</span>
+    <!-- 卡密验证模态框 -->
+    <div class="card-verify-modal" id="cardVerifyModal">
+        <div class="card-verify-box">
+            <h2>请输入卡密</h2>
+            <p>使用本服务需要有效的卡密</p>
+            <input type="text" id="cardKeyInput" placeholder="auto-login-XXXX-XXXX-XXXX" maxlength="30">
+            <div class="error-message" id="cardErrorMsg" style="display: none;"></div>
+            <button class="verify-btn" id="verifyCardBtn" onclick="verifyCard()">验证</button>
         </div>
+    </div>
+
+    <!-- 主内容 -->
+    <div id="mainContent" style="display: none;">
+        <div id="cardInfo"></div>
         
-        <div class="input-group">
-            <input type="text" id="deviceCode" placeholder="输入设备代码 (8位)" maxlength="8">
+        <div class="container">
+            <div class="count-display">
+                <span class="label">剩余账号</span>
+                <span class="count" id="accountCount">-</span>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="deviceCode" placeholder="输入设备代码 (8位)" maxlength="8">
+            </div>
+            
+            <button class="login-btn" id="loginBtn">登录</button>
         </div>
-        
-        <button class="login-btn" id="loginBtn">登录</button>
     </div>
     
     <div class="modal" id="modal">

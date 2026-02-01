@@ -1,5 +1,76 @@
 const API_URL = window.location.origin + '/api';
 
+// 检查卡密验证状态
+async function checkCardVerification() {
+    try {
+        const response = await fetch(`${API_URL}/cards/check`);
+        const data = await response.json();
+        
+        if (data.verified) {
+            document.getElementById('cardVerifyModal').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            
+            // 显示卡密信息
+            const expireDate = new Date(data.expire_at);
+            document.getElementById('cardInfo').innerHTML = `
+                <div class="card-info-badge">
+                    <span>卡密: ${data.card_key}</span>
+                    <span>到期: ${expireDate.toLocaleDateString('zh-CN')}</span>
+                </div>
+            `;
+        } else {
+            document.getElementById('cardVerifyModal').style.display = 'flex';
+            document.getElementById('mainContent').style.display = 'none';
+        }
+    } catch (error) {
+        document.getElementById('cardVerifyModal').style.display = 'flex';
+        document.getElementById('mainContent').style.display = 'none';
+    }
+}
+
+// 验证卡密
+async function verifyCard() {
+    const cardKey = document.getElementById('cardKeyInput').value.trim();
+    const errorMsg = document.getElementById('cardErrorMsg');
+    const verifyBtn = document.getElementById('verifyCardBtn');
+    
+    if (!cardKey) {
+        errorMsg.textContent = '请输入卡密';
+        errorMsg.style.display = 'block';
+        return;
+    }
+    
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = '验证中...';
+    errorMsg.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_URL}/cards/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ card_key: cardKey })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            checkCardVerification();
+        } else {
+            errorMsg.textContent = data.message || '验证失败';
+            errorMsg.style.display = 'block';
+        }
+    } catch (error) {
+        errorMsg.textContent = '网络错误，请重试';
+        errorMsg.style.display = 'block';
+    } finally {
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = '验证';
+    }
+}
+
+// 页面加载时检查
+checkCardVerification();
+
 const elements = {
     accountCount: document.getElementById('accountCount'),
     deviceCode: document.getElementById('deviceCode'),

@@ -717,6 +717,7 @@ def generate_cards():
     data = request.json
     count = data.get('count', 1)
     duration = data.get('duration', '1day')
+    card_type = data.get('type', 'normal')  # normal 或 test
     
     # 解析时长
     duration_map = {
@@ -741,6 +742,7 @@ def generate_cards():
         cards[card_key] = {
             'duration': duration,
             'duration_days': duration_days,
+            'type': card_type,
             'created_at': datetime.now().isoformat(),
             'used': False
         }
@@ -753,6 +755,65 @@ def generate_cards():
         'count': len(generated),
         'cards': generated
     })
+
+@app.route('/api/cards/verify', methods=['POST'])
+def verify_card():
+    data = request.json
+    card_key = data.get('card_key', '').strip()
+    
+    if not card_key:
+        return jsonify({'success': False, 'message': '请输入卡密'}), 400
+    
+    cards = load_cards()
+    
+    if card_key not in cards:
+        return jsonify({'success': False, 'message': '卡密不存在'}), 404
+    
+    card = cards[card_key]
+    
+    if card.get('used'):
+        return jsonify({'success': False, 'message': '卡密已被使用'}), 400
+    
+    # 标记为已使用
+    cards[card_key]['used'] = True
+    cards[card_key]['used_at'] = datetime.now().isoformat()
+    
+    # 计算过期时间
+    from datetime import timedelta
+    expire_date = datetime.now() + timedelta(days=card['duration_days'])
+    cards[card_key]['expire_at'] = expire_date.isoformat()
+    
+    save_cards(cards)
+    
+    # 设置session
+    session['card_verified'] = True
+    session['card_key'] = card_key
+    session['expire_at'] = expire_date.isoformat()
+    session['card_type'] = card.get('type', 'normal')
+    
+    return jsonify({
+        'success': True,
+        'message': '验证成功',
+        'duration': card['duration'],
+        'expire_at': expire_date.isoformat(),
+        'type': card.get('type', 'normal')
+    })
+
+@app.route('/api/cards/check', methods=['GET'])
+def check_card():
+    if session.get('card_verified'):
+        expire_at = session.get('expire_at')
+        if expire_at:
+            expire_date = datetime.fromisoformat(expire_at)
+            if datetime.now() < expire_date:
+                return jsonify({
+                    'verified': True,
+                    'card_key': session.get('card_key'),
+                    'expire_at': expire_at,
+                    'type': session.get('card_type', 'normal')
+                })
+    
+    return jsonify({'verified': False})
 
 @app.route('/api/cards/<card_key>', methods=['DELETE'])
 @login_required

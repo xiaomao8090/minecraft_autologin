@@ -173,6 +173,13 @@ const modules = {
             <div class="card-generator">
                 <div class="form-row">
                     <div class="form-group">
+                        <label>卡密类型</label>
+                        <select id="cardType">
+                            <option value="normal">正式卡</option>
+                            <option value="test">测试卡</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>生成数量</label>
                         <input type="number" id="cardCount" value="1" min="1" max="100">
                     </div>
@@ -207,6 +214,7 @@ const modules = {
                     <thead>
                         <tr>
                             <th>卡密</th>
+                            <th>类型</th>
                             <th>有效期</th>
                             <th>创建时间</th>
                             <th>状态</th>
@@ -669,6 +677,7 @@ async function loadCards() {
         tbody.innerHTML = cards.map(card => `
             <tr>
                 <td><code>${card.card_key}</code></td>
+                <td><span class="status-badge ${card.type === 'test' ? 'none' : 'success'}">${card.type === 'test' ? '测试卡' : '正式卡'}</span></td>
                 <td>${card.duration}</td>
                 <td>${new Date(card.created_at).toLocaleString('zh-CN')}</td>
                 <td><span class="status-badge ${card.used ? 'error' : 'success'}">${card.used ? '已使用' : '未使用'}</span></td>
@@ -690,6 +699,7 @@ function setupCards() {
     generateBtn?.addEventListener('click', async () => {
         const count = parseInt(document.getElementById('cardCount').value);
         const duration = document.getElementById('cardDuration').value;
+        const type = document.getElementById('cardType').value;
         
         if (count < 1 || count > 100) {
             alert('数量必须在1-100之间');
@@ -703,7 +713,7 @@ function setupCards() {
             const response = await fetch(`${API_URL}/cards/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ count, duration })
+                body: JSON.stringify({ count, duration, type })
             });
             
             const data = await response.json();
