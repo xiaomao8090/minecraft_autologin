@@ -204,11 +204,11 @@ class Database:
         finally:
             conn.close()
     
-    def add_log(self, ip, action, status, message='', card_key=None, email=None, device_code=None, deleted=False):
+    def add_log(self, ip, action, status, message='', card_key=None, email=None, device_code=None, deleted=False, detail_log=None):
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("INSERT INTO logs (ip, action, card_key, email, device_code, status, message, deleted, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", (ip, action, card_key, email, device_code, status, message, deleted, datetime.now()))
+                cursor.execute("INSERT INTO logs (ip, action, card_key, email, device_code, status, message, detail_log, deleted, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (ip, action, card_key, email, device_code, status, message, detail_log, deleted, datetime.now()))
             conn.commit()
         finally:
             conn.close()

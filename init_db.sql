@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS logs (
     device_code VARCHAR(20),
     status VARCHAR(20) NOT NULL,
     message TEXT,
+    detail_log LONGTEXT,
     deleted BOOLEAN DEFAULT FALSE,
     created_at DATETIME NOT NULL,
     INDEX idx_created_at (created_at),

@@ -121,27 +121,39 @@ def login():
         with open(temp_cookie_file, 'w', encoding='utf-8') as f:
             json.dump(cookie_data, f)
         import sys
+        import subprocess
         sys.path.insert(0, str(script_dir))
+        
+        result = subprocess.run(
+            [str(script_dir / 'venv/bin/python'), str(script_dir / 'auto_login_http.py'), str(temp_cookie_file), device_code, password, email],
+            capture_output=True,
+            text=True,
+            cwd=str(script_dir)
+        )
+        
+        detail_log = result.stdout + '\n' + result.stderr if result.stderr else result.stdout
+        
         from auto_login_http import AutoLoginHTTP
         auto_login = AutoLoginHTTP(debug=True)
         success, error_type, error_msg = auto_login.run(str(temp_cookie_file), device_code, password, email)
+        
         if temp_cookie_file.exists():
             temp_cookie_file.unlink()
         if success:
             db.update_account(email, last_login=datetime.now(), disabled=True)
-            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code)
+            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, detail_log=detail_log)
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
         else:
             if error_type == 'expired_code':
-                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code)
+                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code, detail_log=detail_log)
                 return jsonify({'success': False, 'message': '设备代码已过期，请重新获取', 'email': email})
             elif error_type == 'invalid_cookie' or '用户名或密码错误' in (error_msg or ''):
                 db.delete_cookie(email)
                 db.delete_account(email)
-                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, deleted=True)
+                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, deleted=True, detail_log=detail_log)
                 return jsonify({'success': False, 'message': '账号异常，已自动删除', 'email': email})
             else:
-                db.add_log(ip, 'login', 'failed', error_msg or '登录失败', email=email, device_code=device_code)
+                db.add_log(ip, 'login', 'failed', error_msg or '登录失败', email=email, device_code=device_code, detail_log=detail_log)
                 return jsonify({'success': False, 'message': error_msg or '登录失败', 'email': email})
     except Exception as e:
         db.add_log(ip, 'login', 'error', f'系统错误: {str(e)}', email=email, device_code=device_code)
@@ -460,6 +472,15 @@ def get_logs():
 def delete_log(log_id):
     db.delete_log(log_id)
     return jsonify({'success': True})
+
+@app.route('/api/logs/<int:log_id>/detail', methods=['GET'])
+@login_required
+def get_log_detail(log_id):
+    logs = db.get_logs(1000)
+    log = next((l for l in logs if l['id'] == log_id), None)
+    if log:
+        return jsonify({'success': True, 'detail': log.get('detail_log', '无详细日志')})
+    return jsonify({'success': False, 'message': '日志不存在'}), 404
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
