@@ -87,10 +87,6 @@ def admin_login():
 @app.route('/api/logout', methods=['POST'])
 def admin_logout():
     session.pop('logged_in', None)
-    session.pop('card_verified', None)
-    session.pop('card_key', None)
-    session.pop('expire_at', None)
-    session.pop('card_type', None)
     return jsonify({'success': True})
 
 @app.route('/api/available-count', methods=['GET'])

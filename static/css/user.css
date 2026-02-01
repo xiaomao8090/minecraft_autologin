@@ -263,25 +263,3 @@ input::placeholder {
 .card-info-badge span {
     color: #ccc;
 }
-
-/* 退出登录按钮 */
-.logout-btn {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    padding: 8px 16px;
-    background: transparent;
-    color: #888;
-    border: 1px solid #333;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 100;
-}
-
-.logout-btn:hover {
-    background: #111;
-    color: #fff;
-    border-color: #666;
-}
