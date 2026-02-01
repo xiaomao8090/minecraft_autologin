@@ -16,6 +16,9 @@ cookies/*.json
 # 调试文件
 debug/*.html
 
+# 测试文件夹
+tests/
+
 # 测试结果
 results/test_combo/
 
