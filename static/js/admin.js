@@ -11,11 +11,11 @@ const modules = {
                     <div class="stat-value" id="totalAccounts">0</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">有 Cookie</div>
+                    <div class="stat-label">可用账号</div>
                     <div class="stat-value" id="withCookie">0</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">无 Cookie</div>
+                    <div class="stat-label">已使用</div>
                     <div class="stat-value" id="withoutCookie">0</div>
                 </div>
             </div>
@@ -41,6 +41,10 @@ const modules = {
             </div>
             
             <button class="btn" id="importBtn">导入</button>
+            
+            <div class="batch-actions" style="margin-top: 20px;">
+                <button class="btn" id="deleteUsedAccountsBtn" style="background: #dc3545;">删除已使用账号</button>
+            </div>
             
             <div class="notification" id="importNotification" style="display: none;">
                 <div class="notification-header">
@@ -232,6 +236,10 @@ const modules = {
         <div class="module" id="logs-module">
             <h1 class="module-title">操作日志</h1>
             
+            <div class="batch-actions">
+                <button class="btn" id="deleteAllLogsBtn" style="background: #dc3545;">删除全部日志</button>
+            </div>
+            
             <div class="table-container">
                 <table>
                     <thead>
@@ -293,6 +301,7 @@ function renderModule(moduleName) {
             break;
         case 'logs':
             loadLogs();
+            setupLogs();
             break;
     }
 }
@@ -303,8 +312,8 @@ async function loadStats() {
         const data = await response.json();
         
         document.getElementById('totalAccounts').textContent = data.total;
-        document.getElementById('withCookie').textContent = data.with_cookie;
-        document.getElementById('withoutCookie').textContent = data.without_cookie;
+        document.getElementById('withCookie').textContent = data.available;
+        document.getElementById('withoutCookie').textContent = data.used;
         
         const ctx = document.getElementById('loginChart').getContext('2d');
         new Chart(ctx, {
@@ -509,6 +518,8 @@ function setupImport() {
     document.getElementById('searchInput')?.addEventListener('input', filterAndDisplayAccounts);
     document.getElementById('levelFilter')?.addEventListener('change', filterAndDisplayAccounts);
     document.getElementById('cookieFilter')?.addEventListener('change', filterAndDisplayAccounts);
+    
+    document.getElementById('deleteUsedAccountsBtn')?.addEventListener('click', deleteUsedAccounts);
 }
 
 function showImportNotification(data) {
@@ -789,6 +800,10 @@ async function deleteCard(cardKey) {
     }
 }
 
+function setupLogs() {
+    document.getElementById('deleteAllLogsBtn')?.addEventListener('click', deleteAllLogs);
+}
+
 async function loadLogs() {
     try {
         const response = await fetch(`${API_URL}/logs?limit=100`);
@@ -871,6 +886,44 @@ async function deleteLog(logId) {
             method: 'DELETE'
         });
         loadLogs();
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+async function deleteUsedAccounts() {
+    if (!confirm('确定删除所有已使用（停用）的账号？\n\n此操作不可恢复！')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/accounts/delete-used`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert(`已删除 ${data.deleted_count} 个账号`);
+            loadAccounts();
+        } else {
+            alert('删除失败');
+        }
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+async function deleteAllLogs() {
+    if (!confirm('确定删除全部日志？\n\n此操作不可恢复！')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/logs/delete-all`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert(`已删除 ${data.deleted_count} 条日志`);
+            loadLogs();
+        } else {
+            alert('删除失败');
+        }
     } catch (error) {
         alert('删除失败');
     }

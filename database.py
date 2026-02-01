@@ -230,3 +230,15 @@ class Database:
             conn.commit()
         finally:
             conn.close()
+    
+    def delete_all_logs(self):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM logs")
+                count = cursor.fetchone()['count']
+                cursor.execute("DELETE FROM logs")
+            conn.commit()
+            return count
+        finally:
+            conn.close()

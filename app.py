@@ -332,6 +332,18 @@ def toggle_account(email):
         return jsonify({'success': True, 'disabled': new_status})
     return jsonify({'success': False}), 404
 
+@app.route('/api/accounts/delete-used', methods=['POST'])
+@login_required
+def delete_used_accounts():
+    accounts = db.get_all_accounts()
+    deleted_count = 0
+    for acc in accounts:
+        if acc.get('disabled'):
+            db.delete_account(acc['email'])
+            db.delete_cookie(acc['email'])
+            deleted_count += 1
+    return jsonify({'success': True, 'deleted_count': deleted_count})
+
 @app.route('/api/cookies/get', methods=['POST'])
 @login_required
 def get_cookies():
@@ -398,14 +410,14 @@ def get_cookies():
 def get_stats():
     accounts = db.get_all_accounts()
     total = len(accounts)
-    with_cookie = 0
-    without_cookie = 0
+    available = 0
+    used = 0
     for acc in accounts:
-        if db.get_cookie(acc['email']):
-            with_cookie += 1
+        if acc.get('disabled'):
+            used += 1
         else:
-            without_cookie += 1
-    return jsonify({'total': total, 'with_cookie': with_cookie, 'without_cookie': without_cookie})
+            available += 1
+    return jsonify({'total': total, 'available': available, 'used': used})
 
 @app.route('/api/cards', methods=['GET'])
 @login_required
@@ -498,6 +510,12 @@ def get_log_detail(log_id):
     if log:
         return jsonify({'success': True, 'detail': log.get('detail_log', '无详细日志')})
     return jsonify({'success': False, 'message': '日志不存在'}), 404
+
+@app.route('/api/logs/delete-all', methods=['POST'])
+@login_required
+def delete_all_logs():
+    deleted_count = db.delete_all_logs()
+    return jsonify({'success': True, 'deleted_count': deleted_count})
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
