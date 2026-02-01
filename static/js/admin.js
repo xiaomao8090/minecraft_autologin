@@ -1,5 +1,5 @@
-const API_URL = 'http://localhost:5001/api';
-const socket = io('http://localhost:5001');
+const API_URL = window.location.origin + '/api';
+const socket = io(window.location.origin);
 
 const modules = {
     stats: `

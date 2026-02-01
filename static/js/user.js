@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api';
+const API_URL = window.location.origin + '/api';
 
 const elements = {
     accountCount: document.getElementById('accountCount'),
