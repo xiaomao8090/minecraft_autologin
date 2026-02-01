@@ -1,0 +1,13 @@
+{
+  "example@gmail.com": {
+    "password": "your_password_here",
+    "level": 0,
+    "mcname": "Unknown",
+    "hypixel": {},
+    "capes": [],
+    "created_at": "2026-02-01T00:00:00.000000",
+    "cookie_status": "none",
+    "last_login": null,
+    "cookie_updated": null
+  }
+}

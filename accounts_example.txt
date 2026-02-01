@@ -1,0 +1,25 @@
+# 账号导入示例文件
+# 
+# 支持的格式：
+#
+# 1. 简单格式（仅邮箱和密码）
+# email@example.com:password123
+#
+# 2. 完整格式（包含游戏信息）
+# [等级]email@example.com:password |McName:游戏名 [Hypixel:数据] [Capes:披风列表]
+#
+# 示例：
+
+# 简单格式
+example1@gmail.com:mypassword123
+example2@outlook.com:securepass456
+
+# 完整格式
+[50]player1@gmail.com:password123 |McName:CoolPlayer [Hypixel:Level:100 Coins:50000] [Capes:Optifine,Migrator]
+[30]player2@hotmail.com:pass456 |McName:ProGamer [Hypixel:Level:75 Coins:25000] [Capes:Minecon2016]
+
+# 注意：
+# - 每行一个账号
+# - 以 # 开头的行为注释
+# - 空行会被忽略
+# - 导入时会自动去重

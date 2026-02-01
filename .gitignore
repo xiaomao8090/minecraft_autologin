@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# 敏感数据
+accounts/accounts.json
+accounts/cookies/*.json
+cookies/*.json
+
+# 调试文件
+debug/*.html
+
+# 测试结果
+results/test_combo/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志
+*.log
