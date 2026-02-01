@@ -133,7 +133,7 @@ async function handleLogin() {
         const data = await response.json();
         
         if (data.success) {
-            showModal(true, '登录成功');
+            showModal(true, '授权完成，请检查 HMCL 是否已登录');
             elements.deviceCode.value = '';
             loadAvailableCount();
         } else {
