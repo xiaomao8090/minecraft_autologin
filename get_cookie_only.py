@@ -191,21 +191,31 @@ class CookieGetter:
         return f"{elapsed:.2f}s"
 
 def main():
-    account_input = input("邮箱 或 邮箱:密码: ").strip()
+    import sys
+    
+    # 支持命令行参数: python get_cookie_only.py email:password [--debug]
+    if len(sys.argv) > 1:
+        account_input = sys.argv[1].strip()
+        debug_mode = '--debug' in sys.argv or '-d' in sys.argv
+    else:
+        account_input = input("邮箱 或 邮箱:密码: ").strip()
+        debug_input = input("调试模式? [y/N]: ").strip().lower()
+        debug_mode = debug_input in ['y', 'yes']
+    
     if ':' in account_input:
         parts = account_input.split(':', 1)
         email = parts[0].strip()
         password = parts[1].strip()
     else:
         email = account_input
+        if len(sys.argv) > 1:
+            print("[错误] 命令行模式需要格式: email:password")
+            sys.exit(1)
         password = input("密码: ").strip()
     
     if not email or not password:
         print("[错误] 需要邮箱和密码")
-        return
-    
-    debug_input = input("调试模式? [y/N]: ").strip().lower()
-    debug_mode = debug_input in ['y', 'yes']
+        sys.exit(1)
     
     print("\n" + "="*80)
     print("Cookie 获取工具")
@@ -216,17 +226,17 @@ def main():
     urlpost, ppft = getter.get_login_page()
     if not urlpost or not ppft:
         print("\n[失败] 无法获取登录页面")
-        return
+        sys.exit(1)
     
     success = getter.login(email, password, urlpost, ppft)
     if not success:
         print("\n[失败] 登录失败")
-        return
+        sys.exit(1)
     
     cookies = getter.get_complete_cookies()
     if not cookies:
         print("\n[失败] 获取 Cookie 失败")
-        return
+        sys.exit(1)
     
     filepath = getter.save_cookies(cookies, email)
     if filepath:
@@ -235,8 +245,10 @@ def main():
         print(f"[成功] 用时: {getter.get_elapsed_time()}")
         print(f"[成功] Cookie 数量: {len(cookies)}")
         print("="*80)
+        sys.exit(0)
     else:
         print("\n[失败] 保存失败")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

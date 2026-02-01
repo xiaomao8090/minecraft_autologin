@@ -530,8 +530,7 @@ def get_cookies():
             
             try:
                 result = subprocess.run(
-                    [str(script_dir / 'venv/bin/python'), str(script_dir / 'get_cookie_only.py')],
-                    input=f"{email}:{password}\n",
+                    [str(script_dir / 'venv/bin/python'), str(script_dir / 'get_cookie_only.py'), f"{email}:{password}"],
                     capture_output=True,
                     text=True,
                     cwd=str(script_dir),
@@ -561,13 +560,26 @@ def get_cookies():
                     accounts[email]['cookie_status'] = 'failed'
                     save_accounts(accounts)
                     
+                    # 提取详细错误信息
                     error_msg = '获取失败'
                     if result.returncode != 0:
-                        error_msg = f'脚本错误 (code {result.returncode})'
-                    elif result.stderr:
-                        error_msg = f'错误: {result.stderr[:100]}'
-                    elif '失败' in result.stdout:
-                        error_msg = '登录失败或密码错误'
+                        # 从stdout中提取失败原因
+                        if '登录失败' in result.stdout:
+                            error_msg = '密码错误或账号异常'
+                        elif '无法获取登录页面' in result.stdout:
+                            error_msg = '网络错误'
+                        elif '获取 Cookie 失败' in result.stdout:
+                            error_msg = 'Cookie获取失败'
+                        elif result.stderr:
+                            error_msg = f'错误: {result.stderr[:100]}'
+                        else:
+                            # 显示完整输出的最后几行
+                            lines = result.stdout.strip().split('\n')
+                            last_lines = [l for l in lines[-5:] if l.strip()]
+                            if last_lines:
+                                error_msg = ' | '.join(last_lines)[:150]
+                            else:
+                                error_msg = f'脚本错误 (code {result.returncode})'
                     
                     socketio.emit('cookie_progress', {
                         'current': i + 1,
