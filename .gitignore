@@ -8,8 +8,13 @@ venv/
 env/
 ENV/
 
+# 环境变量
+.env
+.env.local
+
 # 敏感数据
 accounts/accounts.json
+accounts/cards.json
 accounts/cookies/*.json
 cookies/*.json
 
