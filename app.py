@@ -73,7 +73,7 @@ def admin():
         return send_from_directory('static', 'login.html')
     return send_from_directory('static', 'admin.html')
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     data = request.json
     username = data.get('username')
