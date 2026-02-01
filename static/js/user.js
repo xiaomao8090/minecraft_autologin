@@ -1,5 +1,21 @@
 const API_URL = window.location.origin + '/api';
 
+// 退出登录
+async function logout() {
+    try {
+        const response = await fetch(`${API_URL}/logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (error) {
+        alert('退出失败，请重试');
+    }
+}
+
 // 检查卡密验证状态
 async function checkCardVerification() {
     try {
