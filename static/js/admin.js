@@ -401,10 +401,7 @@ function filterAndDisplayAccounts() {
     tbody.innerHTML = filtered.map(acc => `
         <tr class="${acc.disabled ? 'disabled-row' : ''}">
             <td>${acc.email}</td>
-            <td>
-                <span class="password-hidden" data-password="${acc.password}">********</span>
-                <button class="action-btn" onclick="togglePassword(this)">显示</button>
-            </td>
+            <td>********</td>
             <td>${acc.level > 0 ? 'Lv.' + acc.level : '-'}</td>
             <td>${acc.mcname !== 'Unknown' ? acc.mcname : '-'}</td>
             <td style="font-size: 12px; color: #666;">${acc.subscription || '-'}</td>

@@ -185,7 +185,7 @@ def get_accounts():
         has_cookie = db.get_cookie(acc['email']) is not None
         result.append({
             'email': acc['email'],
-            'password': acc['password'],
+            'password': '********',
             'level': acc.get('level', 0),
             'mcname': acc.get('mcname', 'Unknown'),
             'subscription': acc.get('subscription', ''),
