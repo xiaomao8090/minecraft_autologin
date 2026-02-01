@@ -9,7 +9,17 @@ async function logout() {
         });
         
         if (response.ok) {
-            location.reload();
+            // 清除所有本地存储
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // 清除所有cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            // 刷新页面
+            location.reload(true);
         }
     } catch (error) {
         alert('退出失败，请重试');
