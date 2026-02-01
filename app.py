@@ -115,7 +115,7 @@ def login():
     expire_date = datetime.fromisoformat(expire_at)
     days_left = (expire_date - datetime.now()).days
     
-    if days_left <= 0:
+    if days_left < 0:
         db.add_log(ip, 'login', 'failed', '卡密已过期', device_code=device_code, card_key=card_key)
         return jsonify({'success': False, 'message': '卡密已过期'}), 403
     

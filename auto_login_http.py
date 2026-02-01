@@ -264,8 +264,14 @@ class AutoLoginHTTP:
             print(f"  响应长度: {len(response.text)} 字节")
             self.save_html("after_code_submit", response.text, response.url)
             
+            # 检查是否真的成功（必须有明确的成功标识）
+            if self.check_success_in_response(response):
+                print(f"  ✓ 设备代码提交成功")
+                print(f"  ✓ Microsoft 已接受授权请求")
+                return True
+            
             # 检查是否需要密码验证（正常流程）
-            if 'Sign in to your account' in response.text or 'Enter password' in response.text:
+            if 'Sign in to your account' in response.text or 'Enter password' in response.text or 'idDiv_PWD_Username' in response.text or 'i0118' in response.text or 'type="password"' in response.text or 'id="i0118"' in response.text:
                 print(f"  ⚠ 需要额外验证（密码）")
                 return response
             
@@ -274,28 +280,25 @@ class AutoLoginHTTP:
                 print(f"  ⚠ 需要额外验证（安全信息）")
                 return response
             
+            # 如果响应长度显著增加，很可能是需要验证的页面
+            if len(response.text) > 20000:
+                print(f"  ⚠ 检测到大量内容，可能需要验证")
+                return response
+            
             # 检查错误
             error_type, error_msg = self.check_error_in_response(response)
             if error_type == 'expired_code':
                 print(f"  ✗ 设备代码无效: {error_msg}")
                 return 'expired_code'
             
-            # 检查是否真的成功（必须有明确的成功标识）
-            if self.check_success_in_response(response):
-                print(f"  ✓ 设备代码提交成功")
-                print(f"  ✓ Microsoft 已接受授权请求")
-                return True
-            
-            # 如果返回到原始页面且没有任何变化，说明设备代码无效
-            if 'oauth20_remoteconnect.srf' in response.url:
+            # 如果返回到原始页面且响应很小，说明设备代码无效
+            if 'oauth20_remoteconnect.srf' in response.url and len(response.text) < 20000:
                 print(f"  ✗ 设备代码无效或未被授权（返回到原始页面）")
                 return 'expired_code'
             
-            # 其他未知情况也视为失败
-            print(f"  ✗ 未知响应，判断为设备代码无效")
-            if error_type:
-                print(f"  错误信息: {error_msg}")
-            return 'expired_code'
+            # 其他未知情况也视为需要验证
+            print(f"  ⚠ 未知响应，尝试作为验证页面处理")
+            return response
         except Exception as e:
             print(f"[错误] 提交失败: {e}")
             if self.debug:
