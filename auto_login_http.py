@@ -269,24 +269,24 @@ class AutoLoginHTTP:
                 print(f"  ✗ 设备代码无效: {error_msg}")
                 return 'expired_code'
             
-            if self.check_success_in_response(response):
-                print(f"  ✓ 设备代码提交成功")
-                print(f"  ✓ Microsoft 已接受授权请求")
-                return True
-            elif 'Sign in to your account' in response.text or 'Enter password' in response.text:
+            if 'Sign in to your account' in response.text or 'Enter password' in response.text:
                 print(f"  ⚠ 需要额外验证（密码）")
                 return response
             elif 'cancel?mkt=' in response.text:
                 print(f"  ⚠ 需要额外验证（安全信息）")
                 return response
+            elif self.check_success_in_response(response):
+                print(f"  ✓ 设备代码提交成功")
+                print(f"  ✓ Microsoft 已接受授权请求")
+                return True
             elif 'oauth20_remoteconnect.srf' in response.url and len(response.text) < 20000:
                 print(f"  ✗ 设备代码无效或未被授权")
                 return 'expired_code'
             else:
-                print(f"  ✗ 未知响应")
+                print(f"  ✗ 未知响应，可能是无效的设备代码")
                 if error_type:
                     print(f"  错误信息: {error_msg}")
-                return response
+                return 'expired_code'
         except Exception as e:
             print(f"[错误] 提交失败: {e}")
             if self.debug:
@@ -333,6 +333,14 @@ class AutoLoginHTTP:
             print(f"  状态: {response.status_code}")
             print(f"  最终 URL: {response.url}")
             self.save_html("after_password_submit", response.text, response.url)
+            
+            error_type, error_msg, is_fatal = self.classify_error(response.text, response.url)
+            if is_fatal and error_type == 'invalid_password':
+                print(f"  ✗ 密码错误: {error_msg}")
+                return False
+            elif is_fatal and error_type == '2fa_required':
+                print(f"  ✗ 需要2FA验证: {error_msg}")
+                return False
             
             if 'fmHF' in response.text and 'DoSubmit' in response.text:
                 print(f"\n[5/6] 检测到自动提交表单...")
