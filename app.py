@@ -112,6 +112,16 @@ def login():
     password = acc['password']
     script_dir = Path(__file__).parent
     cookie_data = db.get_cookie(email)
+    
+    detail_log = []
+    
+    class LogCapture:
+        def write(self, text):
+            detail_log.append(text)
+            return len(text)
+        def flush(self):
+            pass
+    
     try:
         valid, msg = validate_cookie_data(cookie_data)
         if not valid:
@@ -120,43 +130,46 @@ def login():
         temp_cookie_file = script_dir / "temp_cookie.json"
         with open(temp_cookie_file, 'w', encoding='utf-8') as f:
             json.dump(cookie_data, f)
+        
         import sys
-        import subprocess
-        sys.path.insert(0, str(script_dir))
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = LogCapture()
+        sys.stderr = LogCapture()
         
-        result = subprocess.run(
-            [str(script_dir / 'venv/bin/python'), str(script_dir / 'auto_login_http.py'), str(temp_cookie_file), device_code, password, email],
-            capture_output=True,
-            text=True,
-            cwd=str(script_dir)
-        )
+        try:
+            sys.path.insert(0, str(script_dir))
+            from auto_login_http import AutoLoginHTTP
+            auto_login = AutoLoginHTTP(debug=True)
+            success, error_type, error_msg = auto_login.run(str(temp_cookie_file), device_code, password, email)
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
         
-        detail_log = result.stdout + '\n' + result.stderr if result.stderr else result.stdout
-        
-        from auto_login_http import AutoLoginHTTP
-        auto_login = AutoLoginHTTP(debug=True)
-        success, error_type, error_msg = auto_login.run(str(temp_cookie_file), device_code, password, email)
+        detail_log_text = ''.join(detail_log)
         
         if temp_cookie_file.exists():
             temp_cookie_file.unlink()
+        
         if success:
             db.update_account(email, last_login=datetime.now(), disabled=True)
-            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, detail_log=detail_log)
+            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, detail_log=detail_log_text)
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
         else:
             if error_type == 'expired_code':
-                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code, detail_log=detail_log)
+                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code, detail_log=detail_log_text)
                 return jsonify({'success': False, 'message': '设备代码已过期，请重新获取', 'email': email})
             elif error_type == 'invalid_cookie' or '用户名或密码错误' in (error_msg or ''):
                 db.delete_cookie(email)
                 db.delete_account(email)
-                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, deleted=True, detail_log=detail_log)
+                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, deleted=True, detail_log=detail_log_text)
                 return jsonify({'success': False, 'message': '账号异常，已自动删除', 'email': email})
             else:
-                db.add_log(ip, 'login', 'failed', error_msg or '登录失败', email=email, device_code=device_code, detail_log=detail_log)
+                db.add_log(ip, 'login', 'failed', error_msg or '登录失败', email=email, device_code=device_code, detail_log=detail_log_text)
                 return jsonify({'success': False, 'message': error_msg or '登录失败', 'email': email})
     except Exception as e:
-        db.add_log(ip, 'login', 'error', f'系统错误: {str(e)}', email=email, device_code=device_code)
+        detail_log_text = ''.join(detail_log) if detail_log else str(e)
+        db.add_log(ip, 'login', 'error', f'系统错误: {str(e)}', email=email, device_code=device_code, detail_log=detail_log_text)
         return jsonify({'success': False, 'message': f'系统错误: {str(e)}'}), 500
 
 @app.route('/api/accounts', methods=['GET'])
