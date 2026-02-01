@@ -100,19 +100,31 @@ def login():
     device_code = data.get('device_code', '').strip().upper()
     ip = request.remote_addr
     card_key = session.get('card_key')
+    expire_at = session.get('expire_at')
     
     if len(device_code) != 8:
         if card_key:
             db.increment_fail_count(card_key)
         db.add_log(ip, 'login', 'failed', '设备代码格式错误', device_code=device_code, card_key=card_key)
         return jsonify({'success': False, 'message': '设备代码必须是8位'}), 400
-    available = get_available_accounts()
-    if not available:
+    
+    if not expire_at:
+        db.add_log(ip, 'login', 'failed', '未验证卡密', device_code=device_code)
+        return jsonify({'success': False, 'message': '请先验证卡密'}), 401
+    
+    expire_date = datetime.fromisoformat(expire_at)
+    days_left = (expire_date - datetime.now()).days
+    
+    if days_left <= 0:
+        db.add_log(ip, 'login', 'failed', '卡密已过期', device_code=device_code, card_key=card_key)
+        return jsonify({'success': False, 'message': '卡密已过期'}), 403
+    
+    account = db.get_smart_account(card_key, days_left)
+    if not account:
         if card_key:
             db.increment_fail_count(card_key)
-        db.add_log(ip, 'login', 'failed', '没有可用账号', device_code=device_code, card_key=card_key)
-        return jsonify({'success': False, 'message': '没有可用账号'}), 400
-    account = available[0]
+        db.add_log(ip, 'login', 'failed', '没有符合条件的账号', device_code=device_code, card_key=card_key)
+        return jsonify({'success': False, 'message': '找客服处理'}), 400
     email = account['email']
     acc = db.get_account(email)
     password = acc['password']
@@ -154,6 +166,7 @@ def login():
         if success:
             if card_key:
                 db.increment_success_count(card_key)
+                db.update_last_used_email(card_key, email)
             db.update_account(email, last_login=datetime.now(), disabled=True)
             db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, card_key=card_key, detail_log=detail_log)
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
@@ -246,11 +259,27 @@ def process_account_text(text):
     pattern_simple = r'([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+):([^\s\|]+)'
     lines = text.strip().split('\n')
     processed_emails = {}
+    
+    def parse_subscription_info(line):
+        subscription_days = 0
+        auto_renew = False
+        
+        day_match = re.search(r'day:(\d+)', line)
+        if day_match:
+            subscription_days = int(day_match.group(1))
+        
+        if '自动续费' in line or 'auto renew' in line.lower():
+            auto_renew = True
+        
+        return subscription_days, auto_renew
+    
     for line in lines:
         line = line.strip()
         if not line or line.startswith('#'):
             continue
         total_lines += 1
+        
+        subscription_days, auto_renew = parse_subscription_info(line)
         match_full = re.search(pattern_full, line)
         if match_full:
             level, email, password, mcname, hypixel, capes = match_full.groups()
@@ -272,10 +301,10 @@ def process_account_text(text):
             if existing and existing['password'] == password:
                 duplicate_count += 1
             elif existing and existing['password'] != password:
-                db.update_account(email, password=password, level=int(level), mcname=mcname.strip(), hypixel=hypixel_data, capes=cape_list)
+                db.update_account(email, password=password, level=int(level), mcname=mcname.strip(), hypixel=hypixel_data, capes=cape_list, subscription_days=subscription_days, auto_renew=auto_renew)
                 password_update_count += 1
             else:
-                db.add_account(email, password, int(level), mcname.strip(), '', hypixel_data, cape_list)
+                db.add_account(email, password, int(level), mcname.strip(), '', hypixel_data, cape_list, subscription_days, auto_renew)
                 new_count += 1
             continue
         match_subscription = re.search(pattern_subscription, line)
@@ -296,10 +325,10 @@ def process_account_text(text):
             if existing and existing['password'] == password:
                 duplicate_count += 1
             elif existing and existing['password'] != password:
-                db.update_account(email, password=password, subscription=subscription_info)
+                db.update_account(email, password=password, subscription=subscription_info, subscription_days=subscription_days, auto_renew=auto_renew)
                 password_update_count += 1
             else:
-                db.add_account(email, password, 0, 'Unknown', subscription_info)
+                db.add_account(email, password, 0, 'Unknown', subscription_info, None, None, subscription_days, auto_renew)
                 new_count += 1
             continue
         match_simple = re.search(pattern_simple, line)
@@ -319,10 +348,10 @@ def process_account_text(text):
             if existing and existing['password'] == password:
                 duplicate_count += 1
             elif existing and existing['password'] != password:
-                db.update_account(email, password=password)
+                db.update_account(email, password=password, subscription_days=subscription_days, auto_renew=auto_renew)
                 password_update_count += 1
             else:
-                db.add_account(email, password)
+                db.add_account(email, password, 0, 'Unknown', '', None, None, subscription_days, auto_renew)
                 new_count += 1
         else:
             error_count += 1
@@ -551,6 +580,12 @@ def ban_user(card_key):
 def unban_user(card_key):
     db.unban_card(card_key)
     return jsonify({'success': True})
+
+@app.route('/api/subscription/update', methods=['POST'])
+@login_required
+def update_subscriptions():
+    count = db.update_subscription_days()
+    return jsonify({'success': True, 'updated_count': count})
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

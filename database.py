@@ -57,11 +57,11 @@ class Database:
         finally:
             conn.close()
     
-    def add_account(self, email, password, level=0, mcname='Unknown', subscription='', hypixel=None, capes=None):
+    def add_account(self, email, password, level=0, mcname='Unknown', subscription='', hypixel=None, capes=None, subscription_days=0, auto_renew=False):
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("INSERT INTO accounts (email, password, level, mcname, subscription, hypixel, capes, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (email, self.encrypt(password), level, mcname, subscription, json.dumps(hypixel or {}), json.dumps(capes or []), datetime.now()))
+                cursor.execute("INSERT INTO accounts (email, password, level, mcname, subscription, hypixel, capes, subscription_days, auto_renew, subscription_updated_at, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURDATE(), %s)", (email, self.encrypt(password), level, mcname, subscription, json.dumps(hypixel or {}), json.dumps(capes or []), subscription_days, auto_renew, datetime.now()))
             conn.commit()
         finally:
             conn.close()
@@ -99,6 +99,12 @@ class Database:
                 if 'disabled' in kwargs:
                     updates.append("disabled = %s")
                     values.append(kwargs['disabled'])
+                if 'subscription_days' in kwargs:
+                    updates.append("subscription_days = %s")
+                    values.append(kwargs['subscription_days'])
+                if 'auto_renew' in kwargs:
+                    updates.append("auto_renew = %s")
+                    values.append(kwargs['auto_renew'])
                 values.append(email)
                 cursor.execute(f"UPDATE accounts SET {', '.join(updates)} WHERE email = %s", values)
             conn.commit()
@@ -285,5 +291,82 @@ class Database:
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE cards SET fail_count = fail_count + 1 WHERE card_key = %s", (card_key,))
             conn.commit()
+        finally:
+            conn.close()
+    
+    def update_last_used_email(self, card_key, email):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE cards SET last_used_email = %s WHERE card_key = %s", (email, card_key))
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def get_smart_account(self, card_key, days_left):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                card = self.get_card(card_key)
+                last_used_email = card.get('last_used_email') if card else None
+                
+                if last_used_email:
+                    cursor.execute("SELECT * FROM accounts WHERE email = %s AND disabled = FALSE", (last_used_email,))
+                    last_account = cursor.fetchone()
+                    if last_account:
+                        cookie = self.get_cookie(last_used_email)
+                        if cookie:
+                            return last_account
+                
+                cursor.execute("""
+                    SELECT * FROM accounts 
+                    WHERE disabled = FALSE 
+                    AND subscription_days >= %s 
+                    AND auto_renew = FALSE
+                    ORDER BY ABS(subscription_days - %s) ASC
+                    LIMIT 1
+                """, (days_left, days_left))
+                account = cursor.fetchone()
+                if account and self.get_cookie(account['email']):
+                    return account
+                
+                cursor.execute("""
+                    SELECT * FROM accounts 
+                    WHERE disabled = FALSE 
+                    AND auto_renew = TRUE
+                    ORDER BY subscription_days ASC
+                    LIMIT 1
+                """)
+                account = cursor.fetchone()
+                if account and self.get_cookie(account['email']):
+                    return account
+                
+                cursor.execute("""
+                    SELECT * FROM accounts 
+                    WHERE disabled = FALSE 
+                    AND subscription_days < %s
+                    ORDER BY subscription_days DESC
+                    LIMIT 1
+                """, (days_left,))
+                account = cursor.fetchone()
+                if account and self.get_cookie(account['email']):
+                    return account
+                
+                return None
+        finally:
+            conn.close()
+    
+    def update_subscription_days(self):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE accounts 
+                    SET subscription_days = GREATEST(subscription_days - 1, 0),
+                        subscription_updated_at = CURDATE()
+                    WHERE subscription_updated_at < CURDATE() OR subscription_updated_at IS NULL
+                """)
+            conn.commit()
+            return cursor.rowcount
         finally:
             conn.close()
