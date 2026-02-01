@@ -642,6 +642,9 @@ function setupCookies() {
         });
     });
     
+    socket.off('cookie_progress');
+    socket.off('cookie_complete');
+    
     socket.on('cookie_progress', (data) => {
         const percent = (data.current / data.total * 100).toFixed(0);
         document.getElementById('progressFill').style.width = `${percent}%`;
