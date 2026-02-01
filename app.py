@@ -129,10 +129,10 @@ def login():
         else:
             if error_type == 'expired_code':
                 return jsonify({'success': False, 'message': '设备代码已过期，请重新获取', 'email': email})
-            elif error_type == 'invalid_cookie':
+            elif error_type == 'invalid_cookie' or '用户名或密码错误' in (error_msg or ''):
                 db.delete_cookie(email)
-                db.update_account(email, disabled=True, cookie_status='failed')
-                return jsonify({'success': False, 'message': 'Cookie已失效，已自动删除并停用账号', 'email': email})
+                db.delete_account(email)
+                return jsonify({'success': False, 'message': '账号异常，已自动删除', 'email': email})
             else:
                 return jsonify({'success': False, 'message': error_msg or '登录失败', 'email': email})
     except Exception as e:
