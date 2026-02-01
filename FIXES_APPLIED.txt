@@ -1,0 +1,83 @@
+修复详细日志和HMCL登录问题
+==========================
+
+已修复的问题:
+-----------
+
+1. ✓ "详细"按钮没反应
+   - 添加了 viewDetail() 函数到 admin.js
+   - 添加了日志模块 (logs module) 到前端
+   - 现在点击"详细"会弹出完整的登录流程日志
+
+2. ✓ HMCL没有登录成功
+   - 修复了 auto_login_http.py 不接受命令行参数的问题
+   - 添加了 sys.argv 处理逻辑
+   - 修复了临时Cookie文件路径问题（使用绝对路径）
+   - 添加了3秒等待时间让HMCL完成OAuth轮询
+
+3. ✓ 速度太快
+   - 在Microsoft授权完成后添加等待时间
+   - 给HMCL足够时间完成token获取
+
+4. ✓ "没有找到 Cookie 文件"错误
+   - 修复了subprocess调用时的文件路径问题
+   - 使用绝对路径传递临时Cookie文件
+   - 每个设备代码使用独立的临时文件
+
+技术细节:
+--------
+
+修改的文件:
+1. static/js/admin.js
+   - 添加 logs 模块HTML
+   - 添加 loadLogs() 函数
+   - 添加 viewDetail() 函数显示详细日志弹窗
+   - 添加 deleteLog() 函数
+
+2. app.py
+   - 修复临时Cookie文件路径（使用绝对路径）
+   - 为每个设备代码创建独立的临时文件
+   - 添加60秒超时防止挂起
+
+3. auto_login_http.py
+   - 添加命令行参数支持 (sys.argv)
+   - 添加3秒等待时间让HMCL完成登录
+   - 改进成功消息显示
+
+部署步骤:
+--------
+
+在服务器上运行:
+
+cd /root/minecraft_autologin
+git pull
+chmod +x update_detail_logs.sh
+./update_detail_logs.sh
+
+测试步骤:
+--------
+
+1. 访问管理后台
+2. 点击左侧"日志"菜单
+3. 尝试一次登录（成功或失败都可以）
+4. 在日志列表中找到该记录
+5. 点击绿色的"详细"按钮
+6. 应该会弹出窗口显示完整的登录流程
+
+预期结果:
+--------
+
+- 详细日志包含每一步的URL、HTTP响应、网页内容
+- 登录成功后HMCL应该能正常登录
+- 不再显示"没有找到 Cookie 文件"错误
+- 速度适中，给HMCL足够时间完成
+
+如果还有问题:
+-----------
+
+查看应用日志:
+  tail -f /root/minecraft_autologin/app.log
+
+查看详细日志内容:
+  mysql -u root -p minecraft_autologin
+  SELECT detail_log FROM logs ORDER BY created_at DESC LIMIT 1\G

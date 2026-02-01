@@ -376,6 +376,9 @@ class AutoLoginHTTP:
                         if self.check_success_in_response(skip_response):
                             print(f"  ✓ 检测到授权成功标识")
                             return True
+                        elif 'oauth20_remoteconnect.srf' in skip_response.url:
+                            print(f"  ✓ 返回到设备代码页面，授权已完成")
+                            return True
                         elif 'consent' in skip_response.url.lower() or 'Consent' in skip_response.url:
                             print(f"  ✓ 跳过成功，检测到同意页面")
                             response = skip_response

@@ -1,0 +1,21 @@
+部署命令
+========
+
+1. 在本地终端运行SSH连接:
+   ssh root@154.37.221.205
+
+2. 连接成功后，在服务器上运行:
+   cd /root/minecraft_autologin
+   git pull
+   chmod +x update_detail_logs.sh
+   ./update_detail_logs.sh
+
+3. 如果需要查看服务状态:
+   ps aux | grep "python.*app.py"
+   tail -f app.log
+
+4. 测试功能:
+   - 访问管理后台
+   - 点击"日志"菜单
+   - 尝试登录一次
+   - 点击"详细"按钮查看完整日志
