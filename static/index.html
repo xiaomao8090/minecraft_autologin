@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Login</title>
+    <link rel="stylesheet" href="css/user.css">
+</head>
+<body>
+    <div class="container">
+        <div class="count-display">
+            <span class="label">剩余账号</span>
+            <span class="count" id="accountCount">-</span>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="deviceCode" placeholder="输入设备代码 (8位)" maxlength="8">
+        </div>
+        
+        <button class="login-btn" id="loginBtn">登录</button>
+    </div>
+    
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <svg class="icon" id="modalIcon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <p class="message" id="modalMessage">登录成功</p>
+            <button class="close-btn" id="closeBtn">确定</button>
+        </div>
+    </div>
+    
+    <script src="js/user.js"></script>
+</body>
+</html>

@@ -47,6 +47,8 @@ class AutoLoginHTTP:
             url = "https://login.live.com/oauth20_remoteconnect.srf"
             response = self.session.get(url, timeout=15)
             print(f"  状态: {response.status_code}")
+            print(f"  URL: {response.url}")
+            print(f"  响应长度: {len(response.text)} 字节")
             self.save_html("device_code_page", response.text, response.url)
             ppft_match = re.search(r'"sFT":"([^"]+)"', response.text)
             if not ppft_match:
@@ -57,11 +59,13 @@ class AutoLoginHTTP:
                 print("[错误] 无法提取 PPFT")
                 return False
             ppft = ppft_match.group(1)
+            print(f"  PPFT: {ppft[:20]}...")
             urlpost_match = re.search(r'"urlPost":"([^"]+)"', response.text)
             if not urlpost_match:
                 print("[错误] 无法提取 urlPost")
                 return False
             urlpost = urlpost_match.group(1).replace('&amp;', '&')
+            print(f"  urlPost: {urlpost[:60]}...")
             print(f"\n[2/6] 提交设备代码...")
             data = {
                 'otc': device_code,
@@ -78,12 +82,26 @@ class AutoLoginHTTP:
                 timeout=15
             )
             print(f"  状态: {response.status_code}")
+            print(f"  最终 URL: {response.url}")
+            print(f"  响应长度: {len(response.text)} 字节")
             self.save_html("after_code_submit", response.text, response.url)
+            
             if '800478C7' in response.text:
-                print(f"  设备代码提交成功")
+                print(f"  ✓ 设备代码提交成功")
+                print(f"  ✓ Microsoft 已接受授权请求")
                 return True
+            elif 'Sign in to your account' in response.text or 'Enter password' in response.text:
+                print(f"  ⚠ 需要额外验证（密码）")
+                return response
+            elif 'cancel?mkt=' in response.text:
+                print(f"  ⚠ 需要额外验证（安全信息）")
+                return response
             else:
-                print(f"  需要额外验证")
+                print(f"  ✗ 未知响应")
+                if 'error' in response.text.lower():
+                    error_match = re.search(r'error["\s:]+([^"<]+)', response.text, re.IGNORECASE)
+                    if error_match:
+                        print(f"  错误信息: {error_match.group(1)[:100]}")
                 return response
         except Exception as e:
             print(f"[错误] 提交失败: {e}")
@@ -129,60 +147,25 @@ class AutoLoginHTTP:
                 timeout=15
             )
             print(f"  状态: {response.status_code}")
+            print(f"  最终 URL: {response.url}")
             self.save_html("after_password_submit", response.text, response.url)
-            if 'cancel?mkt=' in response.text or 'cancel' in response.url.lower():
-                print(f"\n[5/6] 跳过安全信息更新...")
-                try:
-                    ipt = re.search(r'(?<="ipt" value=")(.+?)(?=")', response.text).group(1)
-                    pprid = re.search(r'(?<="pprid" value=")(.+?)(?=")', response.text).group(1)
-                    uaid = re.search(r'(?<="uaid" value=")(.+?)(?=")', response.text).group(1)
-                    action_url = re.search(r'(?<=id="fmHF" action=")(.+?)(?=")', response.text).group(1)
-                    verify_data = {
-                        'ipt': ipt,
-                        'pprid': pprid,
-                        'uaid': uaid
-                    }
-                    verify_response = self.session.post(
+            
+            if 'fmHF' in response.text and 'DoSubmit' in response.text:
+                print(f"\n[5/6] 检测到自动提交表单...")
+                action_match = re.search(r'id="fmHF"[^>]*action="([^"]+)"', response.text)
+                if action_match:
+                    action_url = action_match.group(1).replace('&amp;', '&')
+                    print(f"  表单目标: {action_url[:80]}...")
+                    
+                    form_data = {}
+                    for match in re.finditer(r'name="([^"]+)"[^>]*value="([^"]*)"', response.text):
+                        form_data[match.group(1)] = match.group(2)
+                    
+                    print(f"  提交表单字段: {len(form_data)} 个")
+                    
+                    form_response = self.session.post(
                         action_url,
-                        data=verify_data,
-                        allow_redirects=True,
-                        timeout=15
-                    )
-                    self.save_html("verify_response", verify_response.text, verify_response.url)
-                    return_url_match = re.search(r'(?<="recoveryCancel":\{"returnUrl":")(.+?)(?=")', verify_response.text)
-                    if return_url_match:
-                        return_url = return_url_match.group(1)
-                        response = self.session.get(
-                            return_url,
-                            allow_redirects=True,
-                            timeout=15
-                        )
-                        print(f"  已跳过")
-                        self.save_html("after_security_skip", response.text, response.url)
-                    else:
-                        print(f"  无法提取返回 URL")
-                except Exception as e:
-                    print(f"  跳过失败: {e}")
-                    if self.debug:
-                        import traceback
-                        traceback.print_exc()
-            if 'consent' in response.url.lower() or '是否允许' in response.text or 'Accept' in response.text:
-                print(f"\n[6/6] 接受权限请求...")
-                ppft_match = re.search(r'name="PPFT"[^>]*value="([^"]+)"', response.text)
-                if not ppft_match:
-                    ppft_match = re.search(r'"sFT":"([^"]+)"', response.text)
-                urlpost_match = re.search(r'"urlPost":"([^"]+)"', response.text)
-                if not urlpost_match:
-                    urlpost_match = re.search(r'action="([^"]+)"', response.text)
-                if ppft_match and urlpost_match:
-                    ppft = ppft_match.group(1)
-                    urlpost = urlpost_match.group(1).replace('&amp;', '&').replace('\\u0026', '&')
-                    data = {
-                        'PPFT': ppft
-                    }
-                    response = self.session.post(
-                        urlpost,
-                        data=data,
+                        data=form_data,
                         headers={
                             'Content-Type': 'application/x-www-form-urlencoded',
                             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -190,11 +173,157 @@ class AutoLoginHTTP:
                         allow_redirects=True,
                         timeout=15
                     )
-                    print(f"  已接受")
-                    self.save_html("after_consent_accept", response.text, response.url)
+                    print(f"  状态: {form_response.status_code}")
+                    print(f"  最终 URL: {form_response.url}")
+                    self.save_html("after_form_submit", form_response.text, form_response.url)
+                    response = form_response
+            
+            if 'cancel?mkt=' in response.text or 'cancel' in response.url.lower():
+                print(f"\n[5/6] 检测到安全信息页面，点击下一步跳过...")
+                self.save_html("security_cancel_page", response.text, response.url)
+                
+                try:
+                    ru_match = re.search(r'[?&]ru=([^&"\']+)', response.url)
+                    if ru_match:
+                        import urllib.parse
+                        return_url = urllib.parse.unquote(ru_match.group(1))
+                        print(f"  提取到返回URL: {return_url[:80]}...")
+                        
+                        skip_response = self.session.get(
+                            return_url,
+                            allow_redirects=True,
+                            timeout=15
+                        )
+                        print(f"  ✓ 已点击下一步")
+                        print(f"  跳过后URL: {skip_response.url[:80]}...")
+                        print(f"  响应长度: {len(skip_response.text)} 字节")
+                        self.save_html("after_cancel_skip", skip_response.text, skip_response.url)
+                        
+                        if '800478C7' in skip_response.text:
+                            print(f"  ✓ 检测到授权成功标识")
+                            return True
+                        elif 'res=success' in skip_response.url:
+                            print(f"  ✓ URL包含成功标识")
+                            return True
+                        elif 'consent' in skip_response.url.lower() or 'Consent' in skip_response.url:
+                            print(f"  ✓ 跳过成功，检测到同意页面")
+                            response = skip_response
+                        elif 'DoSubmit' in skip_response.text and 'fmHF' in skip_response.text:
+                            print(f"  检测到自动提交表单，提取表单数据...")
+                            action_match = re.search(r'id="fmHF"[^>]*action="([^"]+)"', skip_response.text)
+                            if action_match:
+                                action_url = action_match.group(1).replace('&amp;', '&')
+                                print(f"  表单目标: {action_url[:80]}...")
+                                
+                                form_data = {}
+                                for match in re.finditer(r'name="([^"]+)"[^>]*value="([^"]*)"', skip_response.text):
+                                    form_data[match.group(1)] = match.group(2)
+                                
+                                print(f"  提交表单字段: {len(form_data)} 个")
+                                
+                                form_response = self.session.post(
+                                    action_url,
+                                    data=form_data,
+                                    headers={
+                                        'Content-Type': 'application/x-www-form-urlencoded',
+                                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                                    },
+                                    allow_redirects=True,
+                                    timeout=15
+                                )
+                                print(f"  状态: {form_response.status_code}")
+                                print(f"  最终 URL: {form_response.url[:80]}...")
+                                self.save_html("after_auto_form_submit", form_response.text, form_response.url)
+                                
+                                if 'consent' in form_response.url.lower() or 'Consent' in form_response.url:
+                                    print(f"  ✓ 进入同意页面")
+                                    response = form_response
+                                elif '800478C7' in form_response.text or 'res=success' in form_response.url:
+                                    print(f"  ✓ 授权完成")
+                                    return True
+                                else:
+                                    print(f"  ⚠ 表单提交后状态未知")
+                                    return False
+                            else:
+                                print(f"  ⚠ 无法提取表单action")
+                                return False
+                        else:
+                            print(f"  ⚠ 跳过后未检测到授权完成")
+                            print(f"  可能需要手动在HMCL点击'允许'")
+                            return False
+                    else:
+                        print(f"  ⚠ 无法从URL提取返回地址")
+                        return False
+                except Exception as e:
+                    print(f"  ⚠ 跳过处理异常: {e}")
+                    if self.debug:
+                        import traceback
+                        traceback.print_exc()
+                    return False
+            
+            if 'consent' in response.url.lower() or 'Consent' in response.url:
+                print(f"\n[6/6] 处理同意页面...")
+                
+                server_data_match = re.search(r'var ServerData=({.+?});', response.text, re.DOTALL)
+                if not server_data_match:
+                    print(f"  ✗ 无法提取 ServerData")
+                    return False
+                
+                server_data_str = server_data_match.group(1)
+                
+                canary_match = re.search(r'"sCanary":"([^"]+)"', server_data_str)
+                if not canary_match:
+                    print(f"  ✗ 无法提取 Canary 令牌")
+                    return False
+                
+                canary_raw = canary_match.group(1)
+                canary = canary_raw.replace('\\u002b', '+').replace('\\u002f', '/').replace('\\u003d', '=').replace('\\u003b', ';').replace('\\u003a', ':')
+                
+                print(f"  Canary: {canary[:50]}...")
+                
+                consent_data = {
+                    'ucaction': 'Yes',
+                    'client_id': '000000004C794E0A',
+                    'scope': '000000004C794E0A:XboxLive.signin 000000004C794E0A:int.offline_access',
+                    'cscope': '',
+                    'canary': canary
+                }
+                
+                print(f"  提交同意请求...")
+                consent_response = self.session.post(
+                    response.url,
+                    data=consent_data,
+                    headers={
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                        'Referer': response.url,
+                        'Origin': 'https://account.live.com'
+                    },
+                    allow_redirects=True,
+                    timeout=15
+                )
+                
+                print(f"  状态: {consent_response.status_code}")
+                print(f"  最终 URL: {consent_response.url[:80]}...")
+                self.save_html("after_consent_submit", consent_response.text, consent_response.url)
+                
+                if '800478C7' in consent_response.text or 'res=success' in consent_response.url or '大功告成' in consent_response.text:
+                    print(f"  ✓ 同意成功")
+                    return True
                 else:
-                    print(f"  无法提取表单数据")
-            return True
+                    print(f"  ⚠ 同意响应未知")
+                    if self.debug:
+                        print(f"  响应长度: {len(consent_response.text)} 字节")
+                    return False
+            
+            print(f"\n[警告] 未检测到同意页面，但也未完成授权")
+            print(f"  当前URL: {response.url[:80]}...")
+            if '800478C7' in response.text or 'res=success' in response.url:
+                print(f"  ✓ 检测到授权成功标识")
+                return True
+            else:
+                print(f"  ✗ 未检测到授权成功标识")
+                return False
         except Exception as e:
             print(f"[错误] 额外验证失败: {e}")
             if self.debug:
@@ -207,6 +336,7 @@ class AutoLoginHTTP:
         print("="*80)
         print(f"\n[信息] Cookie 文件: {cookie_file}")
         print(f"[信息] 设备代码: {device_code}")
+        print(f"[信息] 账号: {email}")
         print(f"[信息] 开始处理...\n")
         if not self.load_cookies(cookie_file):
             return False
@@ -214,17 +344,22 @@ class AutoLoginHTTP:
         if result is True:
             print(f"\n[成功] 登录完成")
             print(f"[成功] 用时: {self.get_elapsed_time()}")
+            print(f"[成功] HMCL 应该已经自动登录")
             return True
         elif result is False:
             print(f"\n[失败] 登录失败")
+            print(f"[失败] 设备代码可能无效或已过期")
             return False
         else:
+            print(f"\n[3/6] 处理额外验证...")
             if self.handle_additional_verification(result, password, email):
                 print(f"\n[成功] 登录完成")
                 print(f"[成功] 用时: {self.get_elapsed_time()}")
+                print(f"[成功] HMCL 应该已经自动登录")
                 return True
             else:
                 print(f"\n[失败] 额外验证失败")
+                print(f"[失败] Cookie 可能已过期或账号需要 2FA")
                 return False
     def get_elapsed_time(self):
         elapsed = time.time() - self.start_time

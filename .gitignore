@@ -33,3 +33,7 @@ results/test_combo/
 
 # 日志
 *.log
+
+# Flask
+instance/
+.webassets-cache
