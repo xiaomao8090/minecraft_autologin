@@ -10,11 +10,21 @@ async function checkCardVerification() {
             document.getElementById('cardVerifyModal').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
             
+            // 隐藏卡密中间部分
+            const maskCardKey = (key) => {
+                if (!key || key.length < 10) return key;
+                const parts = key.split('-');
+                if (parts.length === 4) {
+                    return `${parts[0]}-${parts[1]}-***-${parts[3]}`;
+                }
+                return key.substring(0, 8) + '***' + key.substring(key.length - 4);
+            };
+            
             // 显示卡密信息
             const expireDate = new Date(data.expire_at);
             document.getElementById('cardInfo').innerHTML = `
                 <div class="card-info-badge">
-                    <span>卡密: ${data.card_key}</span>
+                    <span>卡密: ${maskCardKey(data.card_key)}</span>
                     <span>到期: ${expireDate.toLocaleDateString('zh-CN')}</span>
                 </div>
             `;
