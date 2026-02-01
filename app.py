@@ -113,10 +113,13 @@ def login():
         return jsonify({'success': False, 'message': '请先验证卡密'}), 401
     
     expire_date = datetime.fromisoformat(expire_at)
-    days_left = (expire_date - datetime.now()).days
+    now = datetime.now()
+    time_diff = expire_date - now
+    days_left = time_diff.days
+    hours_left = time_diff.total_seconds() / 3600
     
-    if days_left < 0:
-        db.add_log(ip, 'login', 'failed', '卡密已过期', device_code=device_code, card_key=card_key)
+    if hours_left < 0:
+        db.add_log(ip, 'login', 'failed', f'卡密已过期 (过期时间:{expire_date}, 当前时间:{now}, 剩余:{hours_left:.1f}小时)', device_code=device_code, card_key=card_key)
         return jsonify({'success': False, 'message': '卡密已过期'}), 403
     
     account = db.get_smart_account(card_key, days_left)
