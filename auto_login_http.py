@@ -8,28 +8,154 @@ import urllib3
 import warnings
 urllib3.disable_warnings()
 warnings.filterwarnings("ignore")
+
 class AutoLoginHTTP:
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, max_retries=3):
         self.session = requests.Session()
         self.session.verify = False
         self.debug = debug
+        self.max_retries = max_retries  # 最大重试次数
         self.start_time = time.time()
         self.step = 0
+        self.stats = {
+            'total_retries': 0,
+            'network_errors': 0,
+            'timeout_errors': 0,
+            'rate_limit_errors': 0
+        }
         if self.debug:
             os.makedirs('debug', exist_ok=True)
     
-    def check_error_in_response(self, response):
-        err_txt_match = re.search(r'"sErrTxt":"([^"]*)"', response.text)
+    def classify_error(self, response_text, response_url=""):
+        """
+        错误分类 - 学习自MSMC
+        返回: (error_type, error_message, is_fatal)
+        is_fatal: True表示致命错误，不应重试
+        """
+        # 1. 检查密码错误（致命错误）
+        if any(keyword in response_text.lower() for keyword in [
+            "password is incorrect",
+            "password incorrect", 
+            "incorrect password",
+            "密码不正确",
+            "密码错误"
+        ]):
+            return 'invalid_password', '密码错误', True
+        
+        # 2. 检查账号不存在（致命错误）
+        if any(keyword in response_text.lower() for keyword in [
+            "account doesn't exist",
+            "account does not exist",
+            "账号不存在"
+        ]):
+            return 'account_not_exist', '账号不存在', True
+        
+        # 3. 检查设备代码过期（致命错误）
+        if any(keyword in response_text.lower() for keyword in [
+            "code expired",
+            "expired code",
+            "代码已过期",
+            "代码过期"
+        ]):
+            return 'expired_code', '设备代码已过期', True
+        
+        # 4. 检查2FA/安全验证（需要特殊处理）
+        if any(keyword in response_url for keyword in [
+            "recover?mkt",
+            "identity/confirm",
+            "Email/Confirm"
+        ]):
+            return '2fa_required', '需要双因素认证', True
+        
+        # 5. 检查安全信息页面（可以跳过）
+        if 'cancel?mkt=' in response_url or 'cancel?mkt=' in response_text:
+            return 'security_info', '安全信息页面', False
+        
+        # 6. 检查速率限制（应该重试）
+        if '429' in str(response_text) or 'too many requests' in response_text.lower():
+            return 'rate_limit', '请求过于频繁', False
+        
+        # 7. 检查登录成功
+        if 'res=success' in response_url:
+            return 'success', '登录成功', False
+        
+        # 8. 检查sErrTxt错误
+        err_txt_match = re.search(r'"sErrTxt":"([^"]*)"', response_text)
         if err_txt_match:
             err_txt = err_txt_match.group(1)
             if err_txt:
-                err_lower = err_txt.lower()
-                if 'expired' in err_lower or 'code' in err_lower:
-                    return 'expired_code', err_txt
-                elif 'password' in err_lower or 'incorrect' in err_lower:
-                    return 'invalid_password', err_txt
+                return 'server_error', err_txt, False
+        
+        # 9. 未知错误（应该重试）
+        return 'unknown_error', '未知错误', False
+    
+    def request_with_retry(self, method, url, **kwargs):
+        """
+        带重试机制的请求 - 学习自MSMC
+        """
+        tries = 0
+        last_error = None
+        
+        while tries < self.max_retries:
+            try:
+                # 设置超时
+                if 'timeout' not in kwargs:
+                    kwargs['timeout'] = 15
+                
+                # 发送请求
+                if method.upper() == 'GET':
+                    response = self.session.get(url, **kwargs)
+                elif method.upper() == 'POST':
+                    response = self.session.post(url, **kwargs)
                 else:
-                    return 'unknown_error', err_txt
+                    raise ValueError(f"不支持的HTTP方法: {method}")
+                
+                # 检查速率限制
+                if response.status_code == 429:
+                    self.stats['rate_limit_errors'] += 1
+                    wait_time = 5 * (tries + 1)  # 递增等待时间
+                    if self.debug:
+                        print(f"  [重试] 速率限制，等待 {wait_time} 秒...")
+                    time.sleep(wait_time)
+                    tries += 1
+                    self.stats['total_retries'] += 1
+                    continue
+                
+                # 请求成功
+                return response, None
+                
+            except requests.exceptions.Timeout:
+                self.stats['timeout_errors'] += 1
+                last_error = 'timeout'
+                if self.debug:
+                    print(f"  [重试] 超时 (尝试 {tries + 1}/{self.max_retries})")
+                
+            except requests.exceptions.ConnectionError:
+                self.stats['network_errors'] += 1
+                last_error = 'connection_error'
+                if self.debug:
+                    print(f"  [重试] 连接错误 (尝试 {tries + 1}/{self.max_retries})")
+                
+            except Exception as e:
+                last_error = str(e)
+                if self.debug:
+                    print(f"  [重试] 异常: {e} (尝试 {tries + 1}/{self.max_retries})")
+            
+            tries += 1
+            self.stats['total_retries'] += 1
+            
+            # 重试前等待
+            if tries < self.max_retries:
+                time.sleep(2 * tries)  # 递增等待时间
+        
+        # 所有重试都失败
+        return None, last_error
+    
+    def check_error_in_response(self, response):
+        """保持向后兼容"""
+        error_type, error_msg, is_fatal = self.classify_error(response.text, response.url)
+        if error_type in ['invalid_password', 'expired_code', 'unknown_error']:
+            return error_type, error_msg
         return None, None
     
     def check_success_in_response(self, response):
@@ -66,13 +192,26 @@ class AutoLoginHTTP:
             return False
     def submit_device_code(self, device_code):
         print(f"[1/6] 访问设备代码页面...")
+        
+        # 使用重试机制访问设备代码页面
+        response, error = self.request_with_retry('GET', "https://login.live.com/oauth20_remoteconnect.srf")
+        
+        if response is None:
+            print(f"[错误] 访问设备代码页面失败: {error}")
+            return False
+        
         try:
-            url = "https://login.live.com/oauth20_remoteconnect.srf"
-            response = self.session.get(url, timeout=15)
             print(f"  状态: {response.status_code}")
             print(f"  URL: {response.url}")
             print(f"  响应长度: {len(response.text)} 字节")
             self.save_html("device_code_page", response.text, response.url)
+            
+            # 检查错误
+            error_type, error_msg, is_fatal = self.classify_error(response.text, response.url)
+            if is_fatal:
+                print(f"[错误] {error_msg}")
+                return False
+            
             ppft_match = re.search(r'"sFT":"([^"]+)"', response.text)
             if not ppft_match:
                 ppft_match = re.search(r'value="([^"]+)"[^>]*name="PPFT"', response.text)
@@ -83,18 +222,23 @@ class AutoLoginHTTP:
                 return False
             ppft = ppft_match.group(1)
             print(f"  PPFT: {ppft[:20]}...")
+            
             urlpost_match = re.search(r'"urlPost":"([^"]+)"', response.text)
             if not urlpost_match:
                 print("[错误] 无法提取 urlPost")
                 return False
             urlpost = urlpost_match.group(1).replace('&amp;', '&')
             print(f"  urlPost: {urlpost[:60]}...")
+            
             print(f"\n[2/6] 提交设备代码...")
             data = {
                 'otc': device_code,
                 'PPFT': ppft
             }
-            response = self.session.post(
+            
+            # 使用重试机制提交设备代码
+            response, error = self.request_with_retry(
+                'POST',
                 urlpost,
                 data=data,
                 headers={
@@ -448,11 +592,26 @@ def main():
     print()
     auto_login = AutoLoginHTTP(debug=debug_mode)
     success, error_type, error_msg = auto_login.run(cookie_file, device_code, password, email)
+    
+    # 显示统计信息
+    if auto_login.stats['total_retries'] > 0:
+        print(f"\n[统计] 总重试次数: {auto_login.stats['total_retries']}")
+        if auto_login.stats['network_errors'] > 0:
+            print(f"[统计] 网络错误: {auto_login.stats['network_errors']}")
+        if auto_login.stats['timeout_errors'] > 0:
+            print(f"[统计] 超时错误: {auto_login.stats['timeout_errors']}")
+        if auto_login.stats['rate_limit_errors'] > 0:
+            print(f"[统计] 速率限制: {auto_login.stats['rate_limit_errors']}")
+    
     if success:
         print("\n✓ 处理完成")
         print("✓ 请检查 HMCL 是否已登录成功")
     else:
         print("\n✗ 处理失败")
+        if error_type:
+            print(f"✗ 错误类型: {error_type}")
+        if error_msg:
+            print(f"✗ 错误信息: {error_msg}")
         if debug_mode:
             print("✗ 请检查 debug/ 文件夹中的 HTML 文件")
 if __name__ == '__main__':
