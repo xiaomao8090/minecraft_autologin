@@ -515,7 +515,10 @@ class AutoLoginHTTP:
         result = self.submit_device_code(device_code)
         
         if result is True:
-            print(f"\n[成功] 登录完成")
+            print(f"\n[成功] Microsoft 授权完成")
+            print(f"[信息] 等待 HMCL 完成登录...")
+            time.sleep(3)
+            print(f"[成功] 登录完成")
             print(f"[成功] 用时: {self.get_elapsed_time()}")
             print(f"[成功] HMCL 应该已经自动登录")
             return True, None, None
@@ -529,7 +532,10 @@ class AutoLoginHTTP:
             print(f"\n[3/6] 处理额外验证...")
             verify_result = self.handle_additional_verification(result, password, email)
             if verify_result is True:
-                print(f"\n[成功] 登录完成")
+                print(f"\n[成功] Microsoft 授权完成")
+                print(f"[信息] 等待 HMCL 完成登录...")
+                time.sleep(3)
+                print(f"[成功] 登录完成")
                 print(f"[成功] 用时: {self.get_elapsed_time()}")
                 print(f"[成功] HMCL 应该已经自动登录")
                 return True, None, None
@@ -615,4 +621,26 @@ def main():
         if debug_mode:
             print("✗ 请检查 debug/ 文件夹中的 HTML 文件")
 if __name__ == '__main__':
-    main()
+    import sys
+    if len(sys.argv) == 5:
+        cookie_file = sys.argv[1]
+        device_code = sys.argv[2]
+        password = sys.argv[3]
+        email = sys.argv[4]
+        
+        auto_login = AutoLoginHTTP(debug=False)
+        success, error_type, error_msg = auto_login.run(cookie_file, device_code, password, email)
+        
+        if success:
+            print("\n✓ 处理完成")
+            print("✓ HMCL 应该已登录成功")
+            sys.exit(0)
+        else:
+            print("\n✗ 处理失败")
+            if error_type:
+                print(f"✗ 错误类型: {error_type}")
+            if error_msg:
+                print(f"✗ 错误信息: {error_msg}")
+            sys.exit(1)
+    else:
+        main()

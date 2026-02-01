@@ -110,7 +110,7 @@ def login():
     email = account['email']
     acc = db.get_account(email)
     password = acc['password']
-    script_dir = Path(__file__).parent
+    script_dir = Path(__file__).parent.absolute()
     cookie_data = db.get_cookie(email)
     
     try:
@@ -119,18 +119,19 @@ def login():
             db.add_log(ip, 'login', 'failed', msg, email=email, device_code=device_code)
             return jsonify({'success': False, 'message': msg}), 400
         
-        temp_cookie_file = script_dir / "temp_cookie.json"
+        temp_cookie_file = script_dir / f"temp_cookie_{device_code}.json"
         with open(temp_cookie_file, 'w', encoding='utf-8') as f:
             json.dump(cookie_data, f)
         
         import subprocess
         result = subprocess.run(
             [str(script_dir / 'venv/bin/python'), '-u', str(script_dir / 'auto_login_http.py'), 
-             str(temp_cookie_file), device_code, password, email],
+             str(temp_cookie_file.absolute()), device_code, password, email],
             capture_output=True,
             text=True,
             cwd=str(script_dir),
-            env={**os.environ, 'PYTHONUNBUFFERED': '1'}
+            env={**os.environ, 'PYTHONUNBUFFERED': '1'},
+            timeout=60
         )
         
         detail_log = result.stdout

@@ -226,6 +226,31 @@ const modules = {
                 </table>
             </div>
         </div>
+    `,
+    
+    logs: `
+        <div class="module" id="logs-module">
+            <h1 class="module-title">操作日志</h1>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>IP</th>
+                            <th>操作</th>
+                            <th>卡密</th>
+                            <th>账号</th>
+                            <th>设备代码</th>
+                            <th>状态</th>
+                            <th>信息</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable"></tbody>
+                </table>
+            </div>
+        </div>
     `
 };
 
@@ -265,6 +290,9 @@ function renderModule(moduleName) {
         case 'cards':
             loadCards();
             setupCards();
+            break;
+        case 'logs':
+            loadLogs();
             break;
     }
 }
@@ -756,6 +784,93 @@ async function deleteCard(cardKey) {
             method: 'DELETE'
         });
         loadCards();
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+async function loadLogs() {
+    try {
+        const response = await fetch(`${API_URL}/logs?limit=100`);
+        const logs = await response.json();
+        
+        const tbody = document.getElementById('logsTable');
+        tbody.innerHTML = logs.map(log => {
+            const statusClass = log.status === 'success' ? 'success' : log.status === 'failed' ? 'error' : 'none';
+            const hasDetail = log.detail_log && log.detail_log.trim().length > 0;
+            
+            return `
+                <tr>
+                    <td style="font-size: 12px;">${new Date(log.created_at).toLocaleString('zh-CN')}</td>
+                    <td>${log.ip || '-'}</td>
+                    <td>${log.action}</td>
+                    <td style="font-size: 11px;">${log.card_key || '-'}</td>
+                    <td style="font-size: 12px;">${log.email || '-'}</td>
+                    <td>${log.device_code || '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${log.status}</span></td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.message || '-'}${log.deleted ? ' (已删除)' : ''}</td>
+                    <td>
+                        ${hasDetail ? `<button class="action-btn" style="background: #28a745;" onclick="viewDetail(${log.id})">详细</button>` : '-'}
+                        <button class="action-btn" onclick="deleteLog(${log.id})">删除</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to load logs:', error);
+    }
+}
+
+async function viewDetail(logId) {
+    try {
+        const response = await fetch(`${API_URL}/logs/${logId}/detail`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+            
+            const content = document.createElement('div');
+            content.style.cssText = 'background: #1a1a1a; padding: 30px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto; border: 1px solid #333;';
+            
+            const title = document.createElement('h2');
+            title.textContent = '详细日志';
+            title.style.cssText = 'color: #fff; margin-bottom: 20px;';
+            
+            const pre = document.createElement('pre');
+            pre.textContent = data.detail || '无详细日志';
+            pre.style.cssText = 'color: #ccc; background: #0a0a0a; padding: 20px; border-radius: 4px; overflow: auto; max-height: 70vh; font-size: 13px; line-height: 1.6;';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '关闭';
+            closeBtn.style.cssText = 'margin-top: 20px; padding: 10px 30px; background: #fff; color: #000; border: none; border-radius: 4px; cursor: pointer;';
+            closeBtn.onclick = () => modal.remove();
+            
+            content.appendChild(title);
+            content.appendChild(pre);
+            content.appendChild(closeBtn);
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+        } else {
+            alert('无法加载详细日志');
+        }
+    } catch (error) {
+        alert('加载失败');
+    }
+}
+
+async function deleteLog(logId) {
+    if (!confirm('确定删除此日志?')) return;
+    
+    try {
+        await fetch(`${API_URL}/logs/${logId}`, {
+            method: 'DELETE'
+        });
+        loadLogs();
     } catch (error) {
         alert('删除失败');
     }
