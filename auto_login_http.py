@@ -170,11 +170,11 @@ class AutoLoginHTTP:
         return None, None
     
     def check_success_in_response(self, response):
-        if '800478C7' in response.text:
-            return True
         if 'res=success' in response.url:
             return True
         if '大功告成' in response.text:
+            return True
+        if '800478C7' in response.text and 'consent' in response.url.lower():
             return True
         return False
     def save_html(self, step_name, content, url=""):
@@ -264,29 +264,38 @@ class AutoLoginHTTP:
             print(f"  响应长度: {len(response.text)} 字节")
             self.save_html("after_code_submit", response.text, response.url)
             
+            # 检查是否需要密码验证（正常流程）
+            if 'Sign in to your account' in response.text or 'Enter password' in response.text:
+                print(f"  ⚠ 需要额外验证（密码）")
+                return response
+            
+            # 检查是否需要安全信息验证
+            if 'cancel?mkt=' in response.text:
+                print(f"  ⚠ 需要额外验证（安全信息）")
+                return response
+            
+            # 检查错误
             error_type, error_msg = self.check_error_in_response(response)
             if error_type == 'expired_code':
                 print(f"  ✗ 设备代码无效: {error_msg}")
                 return 'expired_code'
             
-            if 'Sign in to your account' in response.text or 'Enter password' in response.text:
-                print(f"  ⚠ 需要额外验证（密码）")
-                return response
-            elif 'cancel?mkt=' in response.text:
-                print(f"  ⚠ 需要额外验证（安全信息）")
-                return response
-            elif self.check_success_in_response(response):
+            # 检查是否真的成功（必须有明确的成功标识）
+            if self.check_success_in_response(response):
                 print(f"  ✓ 设备代码提交成功")
                 print(f"  ✓ Microsoft 已接受授权请求")
                 return True
-            elif 'oauth20_remoteconnect.srf' in response.url and len(response.text) < 20000:
-                print(f"  ✗ 设备代码无效或未被授权")
+            
+            # 如果返回到原始页面且没有任何变化，说明设备代码无效
+            if 'oauth20_remoteconnect.srf' in response.url:
+                print(f"  ✗ 设备代码无效或未被授权（返回到原始页面）")
                 return 'expired_code'
-            else:
-                print(f"  ✗ 未知响应，可能是无效的设备代码")
-                if error_type:
-                    print(f"  错误信息: {error_msg}")
-                return 'expired_code'
+            
+            # 其他未知情况也视为失败
+            print(f"  ✗ 未知响应，判断为设备代码无效")
+            if error_type:
+                print(f"  错误信息: {error_msg}")
+            return 'expired_code'
         except Exception as e:
             print(f"[错误] 提交失败: {e}")
             if self.debug:
