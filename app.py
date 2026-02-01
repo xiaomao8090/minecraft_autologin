@@ -23,6 +23,31 @@ def load_accounts():
             return json.load(f)
     return {}
 
+def validate_cookie_file(cookie_file):
+    if not cookie_file.exists():
+        return False, "Cookie文件不存在"
+    
+    try:
+        with open(cookie_file, 'r', encoding='utf-8') as f:
+            cookies = json.load(f)
+        
+        if not isinstance(cookies, dict):
+            return False, "Cookie格式错误"
+        
+        if len(cookies) < 10:
+            return False, f"Cookie不完整（只有{len(cookies)}个）"
+        
+        required_cookies = ['__Host-MSAAUTH', 'WLSSC']
+        missing = [c for c in required_cookies if c not in cookies]
+        if missing:
+            return False, f"缺少关键Cookie: {', '.join(missing)}"
+        
+        return True, "Cookie有效"
+    except json.JSONDecodeError:
+        return False, "Cookie文件格式错误"
+    except Exception as e:
+        return False, f"Cookie验证失败: {str(e)}"
+
 def save_accounts(accounts):
     with open(ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(accounts, f, indent=2, ensure_ascii=False)
@@ -78,15 +103,16 @@ def login():
     source_cookie = COOKIES_DIR / f"{email}.json"
     
     try:
-        if not source_cookie.exists():
-            return jsonify({'success': False, 'message': 'Cookie 不存在'}), 400
+        valid, msg = validate_cookie_file(source_cookie)
+        if not valid:
+            return jsonify({'success': False, 'message': msg}), 400
         
         import sys
         sys.path.insert(0, str(script_dir))
         from auto_login_http import AutoLoginHTTP
         
         auto_login = AutoLoginHTTP(debug=True)
-        success = auto_login.run(str(source_cookie), device_code, password, email)
+        success, error_type, error_msg = auto_login.run(str(source_cookie), device_code, password, email)
         
         if success:
             accounts[email]['last_login'] = datetime.now().isoformat()
@@ -94,13 +120,35 @@ def login():
             save_accounts(accounts)
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
         else:
-            return jsonify({
-                'success': False, 
-                'message': '登录失败，请检查 Cookie 是否有效',
-                'email': email
-            })
+            if error_type == 'expired_code':
+                return jsonify({
+                    'success': False,
+                    'message': '设备代码已过期，请重新获取',
+                    'email': email
+                })
+            elif error_type == 'invalid_cookie':
+                if source_cookie.exists():
+                    source_cookie.unlink()
+                    print(f"[清理] 已删除失效的Cookie: {source_cookie}")
+                
+                accounts[email]['disabled'] = True
+                accounts[email]['cookie_status'] = 'failed'
+                save_accounts(accounts)
+                print(f"[清理] 已停用账号: {email}")
+                
+                return jsonify({
+                    'success': False,
+                    'message': 'Cookie已失效，已自动删除并停用账号',
+                    'email': email
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': error_msg or '登录失败',
+                    'email': email
+                })
     except Exception as e:
-        return jsonify({'success': False, 'message': f'错误: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'系统错误: {str(e)}'}), 500
 
 @app.route('/api/accounts', methods=['GET'])
 def get_accounts():

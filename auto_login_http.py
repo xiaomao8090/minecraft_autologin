@@ -17,6 +17,29 @@ class AutoLoginHTTP:
         self.step = 0
         if self.debug:
             os.makedirs('debug', exist_ok=True)
+    
+    def check_error_in_response(self, response):
+        err_txt_match = re.search(r'"sErrTxt":"([^"]*)"', response.text)
+        if err_txt_match:
+            err_txt = err_txt_match.group(1)
+            if err_txt:
+                err_lower = err_txt.lower()
+                if 'expired' in err_lower or 'code' in err_lower:
+                    return 'expired_code', err_txt
+                elif 'password' in err_lower or 'incorrect' in err_lower:
+                    return 'invalid_password', err_txt
+                else:
+                    return 'unknown_error', err_txt
+        return None, None
+    
+    def check_success_in_response(self, response):
+        if '800478C7' in response.text:
+            return True
+        if 'res=success' in response.url:
+            return True
+        if '大功告成' in response.text:
+            return True
+        return False
     def save_html(self, step_name, content, url=""):
         if not self.debug:
             return
@@ -86,7 +109,12 @@ class AutoLoginHTTP:
             print(f"  响应长度: {len(response.text)} 字节")
             self.save_html("after_code_submit", response.text, response.url)
             
-            if '800478C7' in response.text:
+            error_type, error_msg = self.check_error_in_response(response)
+            if error_type == 'expired_code':
+                print(f"  ✗ 设备代码已过期: {error_msg}")
+                return 'expired_code'
+            
+            if self.check_success_in_response(response):
                 print(f"  ✓ 设备代码提交成功")
                 print(f"  ✓ Microsoft 已接受授权请求")
                 return True
@@ -98,10 +126,8 @@ class AutoLoginHTTP:
                 return response
             else:
                 print(f"  ✗ 未知响应")
-                if 'error' in response.text.lower():
-                    error_match = re.search(r'error["\s:]+([^"<]+)', response.text, re.IGNORECASE)
-                    if error_match:
-                        print(f"  错误信息: {error_match.group(1)[:100]}")
+                if error_type:
+                    print(f"  错误信息: {error_msg}")
                 return response
         except Exception as e:
             print(f"[错误] 提交失败: {e}")
@@ -178,6 +204,10 @@ class AutoLoginHTTP:
                     self.save_html("after_form_submit", form_response.text, form_response.url)
                     response = form_response
             
+            if self.check_success_in_response(response):
+                print(f"  ✓ 验证成功")
+                return True
+            
             if 'cancel?mkt=' in response.text or 'cancel' in response.url.lower():
                 print(f"\n[5/6] 检测到安全信息页面，点击下一步跳过...")
                 self.save_html("security_cancel_page", response.text, response.url)
@@ -199,11 +229,8 @@ class AutoLoginHTTP:
                         print(f"  响应长度: {len(skip_response.text)} 字节")
                         self.save_html("after_cancel_skip", skip_response.text, skip_response.url)
                         
-                        if '800478C7' in skip_response.text:
+                        if self.check_success_in_response(skip_response):
                             print(f"  ✓ 检测到授权成功标识")
-                            return True
-                        elif 'res=success' in skip_response.url:
-                            print(f"  ✓ URL包含成功标识")
                             return True
                         elif 'consent' in skip_response.url.lower() or 'Consent' in skip_response.url:
                             print(f"  ✓ 跳过成功，检测到同意页面")
@@ -235,12 +262,12 @@ class AutoLoginHTTP:
                                 print(f"  最终 URL: {form_response.url[:80]}...")
                                 self.save_html("after_auto_form_submit", form_response.text, form_response.url)
                                 
-                                if 'consent' in form_response.url.lower() or 'Consent' in form_response.url:
-                                    print(f"  ✓ 进入同意页面")
-                                    response = form_response
-                                elif '800478C7' in form_response.text or 'res=success' in form_response.url:
+                                if self.check_success_in_response(form_response):
                                     print(f"  ✓ 授权完成")
                                     return True
+                                elif 'consent' in form_response.url.lower() or 'Consent' in form_response.url:
+                                    print(f"  ✓ 进入同意页面")
+                                    response = form_response
                                 else:
                                     print(f"  ⚠ 表单提交后状态未知")
                                     return False
@@ -307,7 +334,7 @@ class AutoLoginHTTP:
                 print(f"  最终 URL: {consent_response.url[:80]}...")
                 self.save_html("after_consent_submit", consent_response.text, consent_response.url)
                 
-                if '800478C7' in consent_response.text or 'res=success' in consent_response.url or '大功告成' in consent_response.text:
+                if self.check_success_in_response(consent_response):
                     print(f"  ✓ 同意成功")
                     return True
                 else:
@@ -318,7 +345,7 @@ class AutoLoginHTTP:
             
             print(f"\n[警告] 未检测到同意页面，但也未完成授权")
             print(f"  当前URL: {response.url[:80]}...")
-            if '800478C7' in response.text or 'res=success' in response.url:
+            if self.check_success_in_response(response):
                 print(f"  ✓ 检测到授权成功标识")
                 return True
             else:
@@ -339,28 +366,33 @@ class AutoLoginHTTP:
         print(f"[信息] 账号: {email}")
         print(f"[信息] 开始处理...\n")
         if not self.load_cookies(cookie_file):
-            return False
+            return False, 'invalid_cookie', 'Cookie加载失败'
+        
         result = self.submit_device_code(device_code)
+        
         if result is True:
             print(f"\n[成功] 登录完成")
             print(f"[成功] 用时: {self.get_elapsed_time()}")
             print(f"[成功] HMCL 应该已经自动登录")
-            return True
+            return True, None, None
+        elif result == 'expired_code':
+            print(f"\n[失败] 设备代码已过期")
+            return False, 'expired_code', '设备代码已过期'
         elif result is False:
             print(f"\n[失败] 登录失败")
-            print(f"[失败] 设备代码可能无效或已过期")
-            return False
+            return False, 'unknown_error', '登录失败'
         else:
             print(f"\n[3/6] 处理额外验证...")
-            if self.handle_additional_verification(result, password, email):
+            verify_result = self.handle_additional_verification(result, password, email)
+            if verify_result is True:
                 print(f"\n[成功] 登录完成")
                 print(f"[成功] 用时: {self.get_elapsed_time()}")
                 print(f"[成功] HMCL 应该已经自动登录")
-                return True
+                return True, None, None
             else:
                 print(f"\n[失败] 额外验证失败")
                 print(f"[失败] Cookie 可能已过期或账号需要 2FA")
-                return False
+                return False, 'invalid_cookie', 'Cookie已失效或需要2FA'
     def get_elapsed_time(self):
         elapsed = time.time() - self.start_time
         return f"{elapsed:.2f}s"
@@ -415,7 +447,7 @@ def main():
     debug_mode = debug_input in ['y', 'yes']
     print()
     auto_login = AutoLoginHTTP(debug=debug_mode)
-    success = auto_login.run(cookie_file, device_code, password, email)
+    success, error_type, error_msg = auto_login.run(cookie_file, device_code, password, email)
     if success:
         print("\n✓ 处理完成")
         print("✓ 请检查 HMCL 是否已登录成功")
