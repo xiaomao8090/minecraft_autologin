@@ -50,14 +50,26 @@ class AutoLoginHTTP:
         ]):
             return 'account_not_exist', '账号不存在', True
         
-        # 3. 检查设备代码过期（致命错误）
+        # 3. 检查设备代码过期或无效（致命错误）
         if any(keyword in response_text.lower() for keyword in [
             "code expired",
             "expired code",
             "代码已过期",
-            "代码过期"
+            "代码过期",
+            "code is incorrect",
+            "incorrect code",
+            "invalid code",
+            "代码不正确",
+            "代码无效"
         ]):
-            return 'expired_code', '设备代码已过期', True
+            return 'expired_code', '设备代码无效或已过期', True
+        
+        # 检查sErrTxt中的设备代码错误
+        err_txt_match = re.search(r'"sErrTxt":"([^"]*)"', response_text)
+        if err_txt_match:
+            err_txt = err_txt_match.group(1).lower()
+            if 'code' in err_txt or 'otc' in err_txt:
+                return 'expired_code', '设备代码无效', True
         
         # 4. 检查2FA/安全验证（需要特殊处理）
         if any(keyword in response_url for keyword in [
@@ -80,7 +92,6 @@ class AutoLoginHTTP:
             return 'success', '登录成功', False
         
         # 8. 检查sErrTxt错误
-        err_txt_match = re.search(r'"sErrTxt":"([^"]*)"', response_text)
         if err_txt_match:
             err_txt = err_txt_match.group(1)
             if err_txt:
@@ -255,7 +266,7 @@ class AutoLoginHTTP:
             
             error_type, error_msg = self.check_error_in_response(response)
             if error_type == 'expired_code':
-                print(f"  ✗ 设备代码已过期: {error_msg}")
+                print(f"  ✗ 设备代码无效: {error_msg}")
                 return 'expired_code'
             
             if self.check_success_in_response(response):
@@ -268,6 +279,9 @@ class AutoLoginHTTP:
             elif 'cancel?mkt=' in response.text:
                 print(f"  ⚠ 需要额外验证（安全信息）")
                 return response
+            elif 'oauth20_remoteconnect.srf' in response.url and len(response.text) < 20000:
+                print(f"  ✗ 设备代码无效或未被授权")
+                return 'expired_code'
             else:
                 print(f"  ✗ 未知响应")
                 if error_type:
