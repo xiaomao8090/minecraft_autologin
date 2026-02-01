@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, session, redirect, url_for
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import json
@@ -8,14 +8,29 @@ from datetime import datetime
 from pathlib import Path
 import threading
 import time
+from functools import wraps
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+app.secret_key = 'minecraft_autologin_secret_key_2026'  # 用于session
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# 管理员账号配置
+ADMIN_USERNAME = 'xiaomao'
+ADMIN_PASSWORD = '45004879te'
 
 BASE_DIR = Path(__file__).parent
 ACCOUNTS_FILE = BASE_DIR / "accounts" / "accounts.json"
 COOKIES_DIR = BASE_DIR / "accounts" / "cookies"
+
+# 登录验证装饰器
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return jsonify({'success': False, 'message': '未登录'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 def load_accounts():
     if ACCOUNTS_FILE.exists():
@@ -74,7 +89,26 @@ def index():
 
 @app.route('/admin')
 def admin():
+    if not session.get('logged_in'):
+        return send_from_directory('static', 'login.html')
     return send_from_directory('static', 'admin.html')
+
+@app.route('/api/login', methods=['POST'])
+def admin_login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        session['logged_in'] = True
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'message': '用户名或密码错误'}), 401
+
+@app.route('/api/logout', methods=['POST'])
+def admin_logout():
+    session.pop('logged_in', None)
+    return jsonify({'success': True})
 
 @app.route('/api/available-count', methods=['GET'])
 def available_count():
@@ -151,6 +185,7 @@ def login():
         return jsonify({'success': False, 'message': f'系统错误: {str(e)}'}), 500
 
 @app.route('/api/accounts', methods=['GET'])
+@login_required
 def get_accounts():
     accounts = load_accounts()
     result = []
@@ -171,6 +206,7 @@ def get_accounts():
     return jsonify(result)
 
 @app.route('/api/accounts/upload', methods=['POST'])
+@login_required
 def upload_accounts():
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': '没有文件'}), 400
@@ -347,6 +383,7 @@ def upload_accounts():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/accounts', methods=['POST'])
+@login_required
 def add_accounts():
     data = request.json
     text = data.get('text', '')
@@ -472,6 +509,7 @@ def add_accounts():
     })
 
 @app.route('/api/accounts/<email>', methods=['DELETE'])
+@login_required
 def delete_account(email):
     accounts = load_accounts()
     if email in accounts:
@@ -486,6 +524,7 @@ def delete_account(email):
     return jsonify({'success': False}), 404
 
 @app.route('/api/accounts/<email>/toggle', methods=['POST'])
+@login_required
 def toggle_account(email):
     accounts = load_accounts()
     if email in accounts:
@@ -496,6 +535,7 @@ def toggle_account(email):
     return jsonify({'success': False}), 404
 
 @app.route('/api/cookies/get', methods=['POST'])
+@login_required
 def get_cookies():
     data = request.json
     emails = data.get('emails', [])
@@ -557,15 +597,15 @@ def get_cookies():
                         'message': '成功'
                     })
                 else:
-                    accounts[email]['cookie_status'] = 'failed'
-                    save_accounts(accounts)
-                    
-                    # 提取详细错误信息
+                    # Cookie获取失败，自动删除账号和Cookie文件
                     error_msg = '获取失败'
+                    should_delete = False
+                    
                     if result.returncode != 0:
                         # 从stdout中提取失败原因
-                        if '登录失败' in result.stdout:
+                        if '登录失败' in result.stdout or '密码错误' in result.stdout:
                             error_msg = '密码错误或账号异常'
+                            should_delete = True
                         elif '无法获取登录页面' in result.stdout:
                             error_msg = '网络错误'
                         elif '获取 Cookie 失败' in result.stdout:
@@ -580,6 +620,23 @@ def get_cookies():
                                 error_msg = ' | '.join(last_lines)[:150]
                             else:
                                 error_msg = f'脚本错误 (code {result.returncode})'
+                    
+                    # 如果是密码错误，自动删除账号
+                    if should_delete:
+                        # 删除账号
+                        if email in accounts:
+                            del accounts[email]
+                            save_accounts(accounts)
+                        
+                        # 删除Cookie文件（如果存在）
+                        target_cookie = COOKIES_DIR / f"{email}.json"
+                        if target_cookie.exists():
+                            target_cookie.unlink()
+                        
+                        error_msg += ' (已自动删除)'
+                    else:
+                        accounts[email]['cookie_status'] = 'failed'
+                        save_accounts(accounts)
                     
                     socketio.emit('cookie_progress', {
                         'current': i + 1,
@@ -605,6 +662,7 @@ def get_cookies():
     return jsonify({'success': True})
 
 @app.route('/api/stats', methods=['GET'])
+@login_required
 def get_stats():
     accounts = load_accounts()
     total = len(accounts)
