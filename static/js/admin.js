@@ -164,6 +164,60 @@ const modules = {
                 </table>
             </div>
         </div>
+    `,
+    
+    cards: `
+        <div class="module" id="cards-module">
+            <h1 class="module-title">卡密管理</h1>
+            
+            <div class="card-generator">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>生成数量</label>
+                        <input type="number" id="cardCount" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>有效期</label>
+                        <select id="cardDuration">
+                            <option value="1day">1天</option>
+                            <option value="2day">2天</option>
+                            <option value="3day">3天</option>
+                            <option value="7day">7天</option>
+                            <option value="15day">15天</option>
+                            <option value="30day">30天</option>
+                            <option value="1month">1个月</option>
+                            <option value="2month">2个月</option>
+                            <option value="3month">3个月</option>
+                            <option value="6month">6个月</option>
+                            <option value="12month">12个月</option>
+                        </select>
+                    </div>
+                    <button class="btn" id="generateCardsBtn">生成卡密</button>
+                </div>
+            </div>
+            
+            <div class="generated-cards" id="generatedCards" style="display: none;">
+                <h3>生成的卡密</h3>
+                <div class="cards-list" id="cardsList"></div>
+                <button class="btn btn-secondary" id="copyAllCardsBtn">复制全部</button>
+            </div>
+            
+            <div class="table-container" style="margin-top: 30px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>卡密</th>
+                            <th>有效期</th>
+                            <th>创建时间</th>
+                            <th>状态</th>
+                            <th>使用时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cardsTable"></tbody>
+                </table>
+            </div>
+        </div>
     `
 };
 
@@ -199,6 +253,10 @@ function renderModule(moduleName) {
             break;
         case 'status':
             loadStatus();
+            break;
+        case 'cards':
+            loadCards();
+            setupCards();
             break;
     }
 }
@@ -599,6 +657,97 @@ async function loadStatus() {
         `).join('');
     } catch (error) {
         console.error('Failed to load status:', error);
+    }
+}
+
+async function loadCards() {
+    try {
+        const response = await fetch(`${API_URL}/cards`);
+        const cards = await response.json();
+        
+        const tbody = document.getElementById('cardsTable');
+        tbody.innerHTML = cards.map(card => `
+            <tr>
+                <td><code>${card.card_key}</code></td>
+                <td>${card.duration}</td>
+                <td>${new Date(card.created_at).toLocaleString('zh-CN')}</td>
+                <td><span class="status-badge ${card.used ? 'error' : 'success'}">${card.used ? '已使用' : '未使用'}</span></td>
+                <td>${card.used_at ? new Date(card.used_at).toLocaleString('zh-CN') : '-'}</td>
+                <td>
+                    ${!card.used ? `<button class="action-btn" onclick="deleteCard('${card.card_key}')">删除</button>` : '-'}
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load cards:', error);
+    }
+}
+
+function setupCards() {
+    const generateBtn = document.getElementById('generateCardsBtn');
+    const copyAllBtn = document.getElementById('copyAllCardsBtn');
+    
+    generateBtn?.addEventListener('click', async () => {
+        const count = parseInt(document.getElementById('cardCount').value);
+        const duration = document.getElementById('cardDuration').value;
+        
+        if (count < 1 || count > 100) {
+            alert('数量必须在1-100之间');
+            return;
+        }
+        
+        generateBtn.disabled = true;
+        generateBtn.textContent = '生成中...';
+        
+        try {
+            const response = await fetch(`${API_URL}/cards/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ count, duration })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const cardsList = document.getElementById('cardsList');
+                cardsList.innerHTML = data.cards.map(card => 
+                    `<div class="card-item"><code>${card}</code></div>`
+                ).join('');
+                
+                document.getElementById('generatedCards').style.display = 'block';
+                
+                window.generatedCards = data.cards;
+                
+                loadCards();
+            }
+        } catch (error) {
+            alert('生成失败');
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.textContent = '生成卡密';
+        }
+    });
+    
+    copyAllBtn?.addEventListener('click', () => {
+        if (window.generatedCards) {
+            const text = window.generatedCards.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已复制到剪贴板');
+            });
+        }
+    });
+}
+
+async function deleteCard(cardKey) {
+    if (!confirm(`确定删除卡密 ${cardKey}?`)) return;
+    
+    try {
+        await fetch(`${API_URL}/cards/${encodeURIComponent(cardKey)}`, {
+            method: 'DELETE'
+        });
+        loadCards();
+    } catch (error) {
+        alert('删除失败');
     }
 }
 

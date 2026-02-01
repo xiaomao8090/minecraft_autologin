@@ -22,6 +22,7 @@ ADMIN_PASSWORD = '45004879te'
 BASE_DIR = Path(__file__).parent
 ACCOUNTS_FILE = BASE_DIR / "accounts" / "accounts.json"
 COOKIES_DIR = BASE_DIR / "accounts" / "cookies"
+CARDS_FILE = BASE_DIR / "accounts" / "cards.json"
 
 # 登录验证装饰器
 def login_required(f):
@@ -66,6 +67,16 @@ def validate_cookie_file(cookie_file):
 def save_accounts(accounts):
     with open(ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(accounts, f, indent=2, ensure_ascii=False)
+
+def load_cards():
+    if CARDS_FILE.exists():
+        with open(CARDS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_cards(cards):
+    with open(CARDS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cards, f, indent=2, ensure_ascii=False)
 
 def get_available_accounts():
     accounts = load_accounts()
@@ -681,6 +692,77 @@ def get_stats():
         'with_cookie': with_cookie,
         'without_cookie': without_cookie
     })
+
+# 卡密管理API
+@app.route('/api/cards', methods=['GET'])
+@login_required
+def get_cards():
+    cards = load_cards()
+    result = []
+    for card_key, data in cards.items():
+        result.append({
+            'card_key': card_key,
+            'duration': data.get('duration'),
+            'duration_days': data.get('duration_days'),
+            'created_at': data.get('created_at'),
+            'used': data.get('used', False),
+            'used_at': data.get('used_at'),
+            'used_by': data.get('used_by')
+        })
+    return jsonify(result)
+
+@app.route('/api/cards/generate', methods=['POST'])
+@login_required
+def generate_cards():
+    data = request.json
+    count = data.get('count', 1)
+    duration = data.get('duration', '1day')
+    
+    # 解析时长
+    duration_map = {
+        '1day': 1, '2day': 2, '3day': 3, '7day': 7, '15day': 15, '30day': 30,
+        '1month': 30, '2month': 60, '3month': 90, '6month': 180, '12month': 365
+    }
+    
+    duration_days = duration_map.get(duration, 1)
+    
+    cards = load_cards()
+    generated = []
+    
+    for _ in range(count):
+        # 生成卡密: auto-login-XXXX-XXXX-XXXX
+        import random
+        import string
+        part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        part3 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        card_key = f"auto-login-{part1}-{part2}-{part3}"
+        
+        cards[card_key] = {
+            'duration': duration,
+            'duration_days': duration_days,
+            'created_at': datetime.now().isoformat(),
+            'used': False
+        }
+        generated.append(card_key)
+    
+    save_cards(cards)
+    
+    return jsonify({
+        'success': True,
+        'count': len(generated),
+        'cards': generated
+    })
+
+@app.route('/api/cards/<card_key>', methods=['DELETE'])
+@login_required
+def delete_card(card_key):
+    cards = load_cards()
+    if card_key in cards:
+        del cards[card_key]
+        save_cards(cards)
+        return jsonify({'success': True})
+    return jsonify({'success': False}), 404
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

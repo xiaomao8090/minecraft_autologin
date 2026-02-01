@@ -528,3 +528,86 @@ tr.disabled-row td {
         padding: 10px;
     }
 }
+
+/* 卡密管理样式 */
+.card-generator {
+    background: #111;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    margin-bottom: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.form-row .form-group label {
+    display: block;
+    color: #ccc;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.form-row .form-group input,
+.form-row .form-group select {
+    width: 100%;
+    padding: 10px;
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 14px;
+}
+
+.form-row .btn {
+    flex-shrink: 0;
+}
+
+.generated-cards {
+    background: #111;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    margin-bottom: 20px;
+}
+
+.generated-cards h3 {
+    color: #fff;
+    margin-bottom: 15px;
+    font-size: 16px;
+}
+
+.cards-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.card-item {
+    background: #000;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    border: 1px solid #333;
+}
+
+.card-item code {
+    color: #4CAF50;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+}
+
+code {
+    background: #000;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    color: #4CAF50;
+}
