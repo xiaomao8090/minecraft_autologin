@@ -519,13 +519,13 @@ class AutoLoginHTTP:
         
         if result is True:
             print(f"\n[成功] Microsoft 授权完成")
-            print(f"[信息] 等待 HMCL 轮询获取 token...")
+            print(f"[信息] 等待启动器轮询获取 token...")
             for i in range(10):
                 time.sleep(1)
                 print(f"  等待中... {i+1}/10 秒")
             print(f"[成功] 登录完成")
             print(f"[成功] 用时: {self.get_elapsed_time()}")
-            print(f"[成功] 请检查 HMCL 是否已登录")
+            print(f"[成功] 请检查启动器是否已登录")
             return True, None, None
         elif result == 'expired_code':
             print(f"\n[失败] 设备代码已过期")
@@ -538,13 +538,13 @@ class AutoLoginHTTP:
             verify_result = self.handle_additional_verification(result, password, email)
             if verify_result is True:
                 print(f"\n[成功] Microsoft 授权完成")
-                print(f"[信息] 等待 HMCL 轮询获取 token...")
+                print(f"[信息] 等待启动器轮询获取 token...")
                 for i in range(10):
                     time.sleep(1)
                     print(f"  等待中... {i+1}/10 秒")
                 print(f"[成功] 登录完成")
                 print(f"[成功] 用时: {self.get_elapsed_time()}")
-                print(f"[成功] 请检查 HMCL 是否已登录")
+                print(f"[成功] 请检查启动器是否已登录")
                 return True, None, None
             else:
                 print(f"\n[失败] 额外验证失败")
@@ -618,7 +618,7 @@ def main():
     
     if success:
         print("\n✓ 处理完成")
-        print("✓ 请检查 HMCL 是否已登录成功")
+        print("✓ 请检查启动器是否已登录成功")
     else:
         print("\n✗ 处理失败")
         if error_type:
@@ -640,7 +640,7 @@ if __name__ == '__main__':
         
         if success:
             print("\n✓ 处理完成")
-            print("✓ HMCL 应该已登录成功")
+            print("✓ 请检查启动器是否已登录成功")
             sys.exit(0)
         else:
             print("\n✗ 处理失败")
