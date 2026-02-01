@@ -2,7 +2,6 @@ CREATE DATABASE IF NOT EXISTS minecraft_autologin CHARACTER SET utf8mb4 COLLATE 
 
 USE minecraft_autologin;
 
--- 账号表
 CREATE TABLE IF NOT EXISTS accounts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -20,7 +19,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     INDEX idx_disabled (disabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Cookie表
 CREATE TABLE IF NOT EXISTS cookies (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -29,7 +27,6 @@ CREATE TABLE IF NOT EXISTS cookies (
     INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 卡密表
 CREATE TABLE IF NOT EXISTS cards (
     id INT AUTO_INCREMENT PRIMARY KEY,
     card_key VARCHAR(100) NOT NULL UNIQUE,
@@ -44,11 +41,26 @@ CREATE TABLE IF NOT EXISTS cards (
     INDEX idx_used (used)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 管理员表
 CREATE TABLE IF NOT EXISTS admin_users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password TEXT NOT NULL,
     created_at DATETIME NOT NULL,
     INDEX idx_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ip VARCHAR(50),
+    action VARCHAR(50) NOT NULL,
+    card_key VARCHAR(100),
+    email VARCHAR(255),
+    device_code VARCHAR(20),
+    status VARCHAR(20) NOT NULL,
+    message TEXT,
+    deleted BOOLEAN DEFAULT FALSE,
+    created_at DATETIME NOT NULL,
+    INDEX idx_created_at (created_at),
+    INDEX idx_action (action),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -98,10 +98,13 @@ def available_count():
 def login():
     data = request.json
     device_code = data.get('device_code', '').strip().upper()
+    ip = request.remote_addr
     if len(device_code) != 8:
+        db.add_log(ip, 'login', 'failed', '设备代码格式错误', device_code=device_code)
         return jsonify({'success': False, 'message': '设备代码必须是8位'}), 400
     available = get_available_accounts()
     if not available:
+        db.add_log(ip, 'login', 'failed', '没有可用账号', device_code=device_code)
         return jsonify({'success': False, 'message': '没有可用账号'}), 400
     account = available[0]
     email = account['email']
@@ -112,6 +115,7 @@ def login():
     try:
         valid, msg = validate_cookie_data(cookie_data)
         if not valid:
+            db.add_log(ip, 'login', 'failed', msg, email=email, device_code=device_code)
             return jsonify({'success': False, 'message': msg}), 400
         temp_cookie_file = script_dir / "temp_cookie.json"
         with open(temp_cookie_file, 'w', encoding='utf-8') as f:
@@ -125,17 +129,22 @@ def login():
             temp_cookie_file.unlink()
         if success:
             db.update_account(email, last_login=datetime.now(), disabled=True)
+            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code)
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
         else:
             if error_type == 'expired_code':
+                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code)
                 return jsonify({'success': False, 'message': '设备代码已过期，请重新获取', 'email': email})
             elif error_type == 'invalid_cookie' or '用户名或密码错误' in (error_msg or ''):
                 db.delete_cookie(email)
                 db.delete_account(email)
+                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, deleted=True)
                 return jsonify({'success': False, 'message': '账号异常，已自动删除', 'email': email})
             else:
+                db.add_log(ip, 'login', 'failed', error_msg or '登录失败', email=email, device_code=device_code)
                 return jsonify({'success': False, 'message': error_msg or '登录失败', 'email': email})
     except Exception as e:
+        db.add_log(ip, 'login', 'error', f'系统错误: {str(e)}', email=email, device_code=device_code)
         return jsonify({'success': False, 'message': f'系统错误: {str(e)}'}), 500
 
 @app.route('/api/accounts', methods=['GET'])
@@ -403,12 +412,16 @@ def generate_cards():
 def verify_card():
     data = request.json
     card_key = data.get('card_key', '').strip()
+    ip = request.remote_addr
     if not card_key:
+        db.add_log(ip, 'card_verify', 'failed', '卡密为空', card_key=card_key)
         return jsonify({'success': False, 'message': '请输入卡密'}), 400
     card = db.get_card(card_key)
     if not card:
+        db.add_log(ip, 'card_verify', 'failed', '卡密不存在', card_key=card_key)
         return jsonify({'success': False, 'message': '卡密不存在'}), 404
     if card.get('used'):
+        db.add_log(ip, 'card_verify', 'failed', '卡密已被使用', card_key=card_key)
         return jsonify({'success': False, 'message': '卡密已被使用'}), 400
     expire_date = datetime.now() + timedelta(days=card['duration_days'])
     db.use_card(card_key, expire_date)
@@ -416,6 +429,7 @@ def verify_card():
     session['card_key'] = card_key
     session['expire_at'] = expire_date.isoformat()
     session['card_type'] = card.get('type', 'normal')
+    db.add_log(ip, 'card_verify', 'success', f"卡密验证成功，有效期{card['duration']}", card_key=card_key)
     return jsonify({'success': True, 'message': '验证成功', 'duration': card['duration'], 'expire_at': expire_date.isoformat(), 'type': card.get('type', 'normal')})
 
 @app.route('/api/cards/check', methods=['GET'])
@@ -432,6 +446,19 @@ def check_card():
 @login_required
 def delete_card(card_key):
     db.delete_card(card_key)
+    return jsonify({'success': True})
+
+@app.route('/api/logs', methods=['GET'])
+@login_required
+def get_logs():
+    limit = request.args.get('limit', 100, type=int)
+    logs = db.get_logs(limit)
+    return jsonify(logs)
+
+@app.route('/api/logs/<int:log_id>', methods=['DELETE'])
+@login_required
+def delete_log(log_id):
+    db.delete_log(log_id)
     return jsonify({'success': True})
 
 if __name__ == '__main__':

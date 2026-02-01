@@ -203,3 +203,30 @@ class Database:
                 return False
         finally:
             conn.close()
+    
+    def add_log(self, ip, action, status, message='', card_key=None, email=None, device_code=None, deleted=False):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("INSERT INTO logs (ip, action, card_key, email, device_code, status, message, deleted, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", (ip, action, card_key, email, device_code, status, message, deleted, datetime.now()))
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def get_logs(self, limit=100):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM logs ORDER BY created_at DESC LIMIT %s", (limit,))
+                return cursor.fetchall()
+        finally:
+            conn.close()
+    
+    def delete_log(self, log_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM logs WHERE id = %s", (log_id,))
+            conn.commit()
+        finally:
+            conn.close()

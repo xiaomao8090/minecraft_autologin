@@ -1,0 +1,129 @@
+在 modules 对象中添加：
+
+logs: `
+    <div class="module" id="logs-module">
+        <h1 class="module-title">日志</h1>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 140px;">时间</th>
+                        <th style="width: 120px;">IP</th>
+                        <th style="width: 80px;">操作</th>
+                        <th style="width: 150px;">卡密</th>
+                        <th style="width: 180px;">账号</th>
+                        <th style="width: 100px;">设备代码</th>
+                        <th style="width: 60px;">状态</th>
+                        <th>信息</th>
+                        <th style="width: 80px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTable"></tbody>
+            </table>
+        </div>
+    </div>
+`,
+
+在 loadModule 函数的 switch 中添加：
+
+case 'logs':
+    loadLogs();
+    break;
+
+在文件末尾添加这些函数：
+
+async function loadLogs() {
+    try {
+        const response = await fetch(`${API_URL}/logs?limit=200`);
+        const logs = await response.json();
+        const tbody = document.getElementById('logsTable');
+        tbody.innerHTML = logs.map(log => `
+            <tr class="log-${log.status}">
+                <td>${new Date(log.created_at).toLocaleString('zh-CN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'})}</td>
+                <td>${log.ip || '-'}</td>
+                <td>${getActionText(log.action)}</td>
+                <td style="font-size: 11px;">${log.card_key || '-'}</td>
+                <td style="font-size: 12px;">${log.email || '-'}</td>
+                <td>${log.device_code || '-'}</td>
+                <td><span class="status-badge status-${log.status}">${getStatusText(log.status)}</span></td>
+                <td class="log-message">${log.message || '-'}${log.deleted ? ' <span style="color: #ff4444; font-weight: bold;">[已删除]</span>' : ''}</td>
+                <td><button class="btn-delete" onclick="deleteLog(${log.id})">删除</button></td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('加载日志失败:', error);
+    }
+}
+
+function getActionText(action) {
+    const actions = {
+        'login': '登录',
+        'card_verify': '卡密验证',
+        'cookie_get': 'Cookie获取'
+    };
+    return actions[action] || action;
+}
+
+function getStatusText(status) {
+    const statuses = {
+        'success': '成功',
+        'failed': '失败',
+        'error': '错误'
+    };
+    return statuses[status] || status;
+}
+
+async function deleteLog(id) {
+    if (!confirm('确定删除此日志？')) return;
+    try {
+        await fetch(`${API_URL}/logs/${id}`, { method: 'DELETE' });
+        loadLogs();
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+在 CSS 中添加：
+
+.log-message {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-success {
+    background: #00ff0020;
+    color: #00ff00;
+}
+
+.status-failed {
+    background: #ff000020;
+    color: #ff4444;
+}
+
+.status-error {
+    background: #ff880020;
+    color: #ff8800;
+}
+
+.btn-delete {
+    background: #ff4444;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-delete:hover {
+    background: #ff0000;
+}
