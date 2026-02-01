@@ -173,11 +173,11 @@ class Database:
         finally:
             conn.close()
     
-    def use_card(self, card_key, expire_at):
+    def use_card(self, card_key, expire_at, ip=None):
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("UPDATE cards SET used = 1, used_at = %s, expire_at = %s WHERE card_key = %s", (datetime.now(), expire_at, card_key))
+                cursor.execute("UPDATE cards SET used = 1, used_at = %s, expire_at = %s, last_ip = %s WHERE card_key = %s", (datetime.now(), expire_at, ip, card_key))
             conn.commit()
         finally:
             conn.close()
@@ -240,5 +240,50 @@ class Database:
                 cursor.execute("DELETE FROM logs")
             conn.commit()
             return count
+        finally:
+            conn.close()
+    
+    def get_all_used_cards(self):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM cards WHERE used = 1 ORDER BY used_at DESC")
+                return cursor.fetchall()
+        finally:
+            conn.close()
+    
+    def ban_card(self, card_key):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE cards SET banned = 1 WHERE card_key = %s", (card_key,))
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def unban_card(self, card_key):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE cards SET banned = 0 WHERE card_key = %s", (card_key,))
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def increment_success_count(self, card_key):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE cards SET success_count = success_count + 1 WHERE card_key = %s", (card_key,))
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def increment_fail_count(self, card_key):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE cards SET fail_count = fail_count + 1 WHERE card_key = %s", (card_key,))
+            conn.commit()
         finally:
             conn.close()

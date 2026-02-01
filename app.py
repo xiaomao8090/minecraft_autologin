@@ -99,12 +99,18 @@ def login():
     data = request.json
     device_code = data.get('device_code', '').strip().upper()
     ip = request.remote_addr
+    card_key = session.get('card_key')
+    
     if len(device_code) != 8:
-        db.add_log(ip, 'login', 'failed', '设备代码格式错误', device_code=device_code)
+        if card_key:
+            db.increment_fail_count(card_key)
+        db.add_log(ip, 'login', 'failed', '设备代码格式错误', device_code=device_code, card_key=card_key)
         return jsonify({'success': False, 'message': '设备代码必须是8位'}), 400
     available = get_available_accounts()
     if not available:
-        db.add_log(ip, 'login', 'failed', '没有可用账号', device_code=device_code)
+        if card_key:
+            db.increment_fail_count(card_key)
+        db.add_log(ip, 'login', 'failed', '没有可用账号', device_code=device_code, card_key=card_key)
         return jsonify({'success': False, 'message': '没有可用账号'}), 400
     account = available[0]
     email = account['email']
@@ -116,7 +122,9 @@ def login():
     try:
         valid, msg = validate_cookie_data(cookie_data)
         if not valid:
-            db.add_log(ip, 'login', 'failed', msg, email=email, device_code=device_code)
+            if card_key:
+                db.increment_fail_count(card_key)
+            db.add_log(ip, 'login', 'failed', msg, email=email, device_code=device_code, card_key=card_key)
             return jsonify({'success': False, 'message': msg}), 400
         
         temp_cookie_file = script_dir / f"temp_cookie_{device_code}.json"
@@ -144,13 +152,17 @@ def login():
         success = result.returncode == 0
         
         if success:
+            if card_key:
+                db.increment_success_count(card_key)
             db.update_account(email, last_login=datetime.now(), disabled=True)
-            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, detail_log=detail_log)
+            db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, card_key=card_key, detail_log=detail_log)
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
         else:
+            if card_key:
+                db.increment_fail_count(card_key)
             error_msg = '登录失败'
             if '设备代码已过期' in detail_log or 'expired' in detail_log.lower():
-                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code, detail_log=detail_log)
+                db.add_log(ip, 'login', 'failed', '设备代码已过期', email=email, device_code=device_code, card_key=card_key, detail_log=detail_log)
                 return jsonify({'success': False, 'message': '设备代码已过期，请重新获取', 'email': email})
             elif 'Cookie已失效' in detail_log or '需要2FA' in detail_log or '密码错误' in detail_log:
                 db.delete_cookie(email)
@@ -161,19 +173,21 @@ def login():
                     error_msg = '需要2FA验证'
                 else:
                     error_msg = '密码错误'
-                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, deleted=True, detail_log=detail_log)
+                db.add_log(ip, 'login', 'failed', f'账号异常已删除: {error_msg}', email=email, device_code=device_code, card_key=card_key, deleted=True, detail_log=detail_log)
                 return jsonify({'success': False, 'message': '账号异常，已自动删除', 'email': email})
             else:
                 lines = detail_log.strip().split('\n')
                 last_lines = [l for l in lines[-3:] if l.strip()]
                 if last_lines:
                     error_msg = last_lines[-1][:100]
-                db.add_log(ip, 'login', 'failed', error_msg, email=email, device_code=device_code, detail_log=detail_log)
+                db.add_log(ip, 'login', 'failed', error_msg, email=email, device_code=device_code, card_key=card_key, detail_log=detail_log)
                 return jsonify({'success': False, 'message': error_msg, 'email': email})
     except Exception as e:
         import traceback
         detail_log = traceback.format_exc()
-        db.add_log(ip, 'login', 'error', f'系统错误: {str(e)}', email=email, device_code=device_code, detail_log=detail_log)
+        if card_key:
+            db.increment_fail_count(card_key)
+        db.add_log(ip, 'login', 'error', f'系统错误: {str(e)}', email=email, device_code=device_code, card_key=card_key, detail_log=detail_log)
         return jsonify({'success': False, 'message': f'系统错误: {str(e)}'}), 500
 
 @app.route('/api/accounts', methods=['GET'])
@@ -461,11 +475,14 @@ def verify_card():
     if not card:
         db.add_log(ip, 'card_verify', 'failed', '卡密不存在', card_key=card_key)
         return jsonify({'success': False, 'message': '卡密不存在'}), 404
+    if card.get('banned'):
+        db.add_log(ip, 'card_verify', 'failed', '卡密已被封禁', card_key=card_key)
+        return jsonify({'success': False, 'message': '卡密已被封禁'}), 403
     if card.get('used'):
         db.add_log(ip, 'card_verify', 'failed', '卡密已被使用', card_key=card_key)
         return jsonify({'success': False, 'message': '卡密已被使用'}), 400
     expire_date = datetime.now() + timedelta(days=card['duration_days'])
-    db.use_card(card_key, expire_date)
+    db.use_card(card_key, expire_date, ip)
     session['card_verified'] = True
     session['card_key'] = card_key
     session['expire_at'] = expire_date.isoformat()
@@ -516,6 +533,24 @@ def get_log_detail(log_id):
 def delete_all_logs():
     deleted_count = db.delete_all_logs()
     return jsonify({'success': True, 'deleted_count': deleted_count})
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+def get_users():
+    users = db.get_all_used_cards()
+    return jsonify(users)
+
+@app.route('/api/users/<card_key>/ban', methods=['POST'])
+@login_required
+def ban_user(card_key):
+    db.ban_card(card_key)
+    return jsonify({'success': True})
+
+@app.route('/api/users/<card_key>/unban', methods=['POST'])
+@login_required
+def unban_user(card_key):
+    db.unban_card(card_key)
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

@@ -259,6 +259,31 @@ const modules = {
                 </table>
             </div>
         </div>
+    `,
+    
+    users: `
+        <div class="module" id="users-module">
+            <h1 class="module-title">用户管理</h1>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>卡密</th>
+                            <th>类型</th>
+                            <th>剩余天数</th>
+                            <th>成功次数</th>
+                            <th>失败次数</th>
+                            <th>最后IP</th>
+                            <th>到期时间</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable"></tbody>
+                </table>
+            </div>
+        </div>
     `
 };
 
@@ -302,6 +327,9 @@ function renderModule(moduleName) {
         case 'logs':
             loadLogs();
             setupLogs();
+            break;
+        case 'users':
+            loadUsers();
             break;
     }
 }
@@ -926,6 +954,90 @@ async function deleteAllLogs() {
         }
     } catch (error) {
         alert('删除失败');
+    }
+}
+
+async function loadUsers() {
+    try {
+        const response = await fetch(`${API_URL}/users`);
+        const users = await response.json();
+        
+        const tbody = document.getElementById('usersTable');
+        tbody.innerHTML = users.map(user => {
+            const expireDate = user.expire_at ? new Date(user.expire_at) : null;
+            const now = new Date();
+            const daysLeft = expireDate ? Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24)) : 0;
+            const statusClass = user.banned ? 'error' : (daysLeft > 0 ? 'success' : 'none');
+            const statusText = user.banned ? '已封禁' : (daysLeft > 0 ? '正常' : '已过期');
+            
+            const maskCardKey = (key) => {
+                if (!key || key.length < 10) return key;
+                const parts = key.split('-');
+                if (parts.length === 4) {
+                    return `${parts[0]}-${parts[1]}-***-${parts[3]}`;
+                }
+                return key.substring(0, 8) + '***' + key.substring(key.length - 4);
+            };
+            
+            return `
+                <tr>
+                    <td><code>${maskCardKey(user.card_key)}</code></td>
+                    <td><span class="status-badge ${user.type === 'test' ? 'none' : 'success'}">${user.type === 'test' ? '测试' : '正式'}</span></td>
+                    <td>${daysLeft > 0 ? daysLeft + ' 天' : '-'}</td>
+                    <td>${user.success_count || 0}</td>
+                    <td>${user.fail_count || 0}</td>
+                    <td>${user.last_ip || '-'}</td>
+                    <td>${expireDate ? expireDate.toLocaleDateString('zh-CN') : '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>
+                        ${user.banned 
+                            ? `<button class="action-btn" style="background: #28a745;" onclick="unbanUser('${user.card_key}')">解封</button>`
+                            : `<button class="action-btn" style="background: #dc3545;" onclick="banUser('${user.card_key}')">封禁</button>`
+                        }
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to load users:', error);
+    }
+}
+
+async function banUser(cardKey) {
+    if (!confirm(`确定封禁此用户？\n\n卡密: ${cardKey}`)) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${encodeURIComponent(cardKey)}/ban`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert('已封禁');
+            loadUsers();
+        } else {
+            alert('封禁失败');
+        }
+    } catch (error) {
+        alert('封禁失败');
+    }
+}
+
+async function unbanUser(cardKey) {
+    if (!confirm(`确定解封此用户？\n\n卡密: ${cardKey}`)) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${encodeURIComponent(cardKey)}/unban`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert('已解封');
+            loadUsers();
+        } else {
+            alert('解封失败');
+        }
+    } catch (error) {
+        alert('解封失败');
     }
 }
 
