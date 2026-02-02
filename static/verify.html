@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卡密验证 - Minecraft Login</title>
+    <link rel="stylesheet" href="css/verify.css">
+</head>
+<body>
+    <div class="container">
+        <div class="verify-box">
+            <h1>卡密验证</h1>
+            <p class="subtitle">请输入您的卡密以继续使用服务</p>
+            
+            <div class="input-group">
+                <input type="text" id="cardKeyInput" placeholder="auto-login-XXXX-XXXX-XXXX" maxlength="30" autofocus>
+            </div>
+            
+            <div class="error-message" id="errorMsg" style="display: none;"></div>
+            
+            <button class="verify-btn" id="verifyBtn">验证并继续</button>
+            
+            <div class="help-text">
+                <p>没有卡密？请联系客服购买</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/verify.js"></script>
+</body>
+</html>

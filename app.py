@@ -65,6 +65,8 @@ def get_available_accounts():
 
 @app.route('/')
 def index():
+    if not session.get('card_verified'):
+        return send_from_directory('static', 'verify.html')
     return send_from_directory('static', 'index.html')
 
 @app.route('/admin')
