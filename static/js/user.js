@@ -1,5 +1,11 @@
 const API_URL = window.location.origin + '/api';
 
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        document.querySelector('.page-loader').classList.add('hidden');
+    }, 500);
+});
+
 async function checkCardVerification() {
     try {
         const response = await fetch(`${API_URL}/cards/check`);
@@ -20,9 +26,13 @@ async function checkCardVerification() {
         };
         
         const expireDate = new Date(data.expire_at);
+        const now = new Date();
+        const daysLeft = Math.floor((expireDate - now) / (1000 * 60 * 60 * 24));
+        
         document.getElementById('cardInfo').innerHTML = `
             <div class="card-info-badge">
                 <span>卡密: ${maskCardKey(data.card_key)}</span>
+                <span class="days-left">剩余 ${daysLeft} 天</span>
                 <span>到期: ${expireDate.toLocaleDateString('zh-CN')}</span>
             </div>
         `;
@@ -40,7 +50,11 @@ const elements = {
     modal: document.getElementById('modal'),
     modalIcon: document.getElementById('modalIcon'),
     modalMessage: document.getElementById('modalMessage'),
-    closeBtn: document.getElementById('closeBtn')
+    subMessage: document.getElementById('subMessage'),
+    closeBtn: document.getElementById('closeBtn'),
+    btnText: document.querySelector('.btn-text'),
+    btnLoader: document.querySelector('.btn-loader'),
+    progressBar: document.getElementById('progressBar')
 };
 
 async function loadAvailableCount() {
@@ -53,9 +67,10 @@ async function loadAvailableCount() {
     }
 }
 
-function showModal(success, message) {
+function showModal(success, message, subMsg = '') {
     elements.modal.classList.add('show');
     elements.modalMessage.textContent = message;
+    elements.subMessage.textContent = subMsg;
     
     if (success) {
         elements.modalIcon.classList.add('success');
@@ -76,12 +91,13 @@ async function handleLogin() {
     const deviceCode = elements.deviceCode.value.trim().toUpperCase();
     
     if (deviceCode.length !== 8) {
-        showModal(false, '设备代码必须是8位');
+        showModal(false, '设备代码必须是8位', '请检查输入的设备代码');
         return;
     }
     
     elements.loginBtn.disabled = true;
-    elements.loginBtn.textContent = '登录中...';
+    elements.btnText.style.display = 'none';
+    elements.btnLoader.style.display = 'inline-block';
     
     try {
         const response = await fetch(`${API_URL}/login`, {
@@ -95,17 +111,18 @@ async function handleLogin() {
         const data = await response.json();
         
         if (data.success) {
-            showModal(true, '授权完成，请检查启动器是否已登录');
+            showModal(true, '授权完成', `使用账号: ${data.email}`);
             elements.deviceCode.value = '';
             loadAvailableCount();
         } else {
-            showModal(false, data.message || '登录失败');
+            showModal(false, data.message || '登录失败', '请重试或联系客服');
         }
     } catch (error) {
-        showModal(false, '网络错误');
+        showModal(false, '网络错误', '请检查网络连接后重试');
     } finally {
         elements.loginBtn.disabled = false;
-        elements.loginBtn.textContent = '登录';
+        elements.btnText.style.display = 'inline';
+        elements.btnLoader.style.display = 'none';
     }
 }
 
@@ -120,6 +137,12 @@ elements.deviceCode.addEventListener('keypress', (e) => {
 
 elements.deviceCode.addEventListener('input', (e) => {
     e.target.value = e.target.value.toUpperCase();
+    const progress = (e.target.value.length / 8) * 100;
+    elements.progressBar.style.width = progress + '%';
+    
+    if (e.target.value.length === 8) {
+        elements.loginBtn.focus();
+    }
 });
 
 loadAvailableCount();

@@ -7,18 +7,26 @@
     <link rel="stylesheet" href="css/verify.css">
 </head>
 <body>
-    <div class="container">
+    <div class="page-loader">
+        <div class="loader-spinner"></div>
+    </div>
+    
+    <div class="container fade-in">
         <div class="verify-box">
             <h1>卡密验证</h1>
             <p class="subtitle">请输入您的卡密以继续使用服务</p>
             
-            <div class="input-group">
+            <div class="input-wrapper">
                 <input type="text" id="cardKeyInput" placeholder="auto-login-XXXX-XXXX-XXXX" maxlength="30" autofocus>
+                <div class="input-hint">格式：auto-login-XXXX-XXXX-XXXX</div>
             </div>
             
             <div class="error-message" id="errorMsg" style="display: none;"></div>
             
-            <button class="verify-btn" id="verifyBtn">验证并继续</button>
+            <button class="verify-btn" id="verifyBtn">
+                <span class="btn-text">验证并继续</span>
+                <span class="btn-loader" style="display: none;"></span>
+            </button>
             
             <div class="help-text">
                 <p>没有卡密？请联系客服购买</p>
