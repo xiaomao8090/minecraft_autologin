@@ -966,7 +966,7 @@ async function loadUsers() {
         tbody.innerHTML = users.map(user => {
             const expireDate = user.expire_at ? new Date(user.expire_at) : null;
             const now = new Date();
-            const daysLeft = expireDate ? Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24)) : 0;
+            const daysLeft = expireDate ? Math.floor((expireDate - now) / (1000 * 60 * 60 * 24)) : 0;
             const statusClass = user.banned ? 'error' : (daysLeft > 0 ? 'success' : 'none');
             const statusText = user.banned ? '已封禁' : (daysLeft > 0 ? '正常' : '已过期');
             
