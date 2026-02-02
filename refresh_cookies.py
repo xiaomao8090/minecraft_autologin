@@ -10,6 +10,14 @@ from database import Database
 script_dir = Path(__file__).parent.absolute()
 db = Database()
 
+try:
+    from email_alert import EmailAlert
+    email_alert = EmailAlert()
+    EMAIL_ENABLED = True
+except Exception as e:
+    print(f"[警告] 邮件告警未配置: {e}")
+    EMAIL_ENABLED = False
+
 def refresh_cookie(email, password):
     try:
         result = subprocess.run(
@@ -76,6 +84,27 @@ def main():
     print(f"失败: {fail_count}")
     print(f"删除: {deleted_count}")
     print(f"总计: {total}")
+    
+    if EMAIL_ENABLED:
+        try:
+            message = f"""Cookie批量刷新完成
+
+总账号: {total}
+成功: {success_count}
+失败: {fail_count}
+删除: {deleted_count}
+
+成功率: {(success_count/total*100):.1f}%"""
+            
+            level = 'info'
+            if success_count / total < 0.5:
+                level = 'critical'
+            elif success_count / total < 0.8:
+                level = 'warning'
+            
+            email_alert.send_alert("Cookie刷新报告", message, level)
+        except Exception as e:
+            print(f"发送邮件失败: {e}")
 
 if __name__ == '__main__':
     main()

@@ -6,6 +6,14 @@ from database import Database
 
 db = Database()
 
+try:
+    from email_alert import EmailAlert
+    email_alert = EmailAlert()
+    EMAIL_ENABLED = True
+except Exception as e:
+    print(f"[警告] 邮件告警未配置: {e}")
+    EMAIL_ENABLED = False
+
 def check_account_health():
     accounts = db.get_all_accounts()
     total = len(accounts)
@@ -64,6 +72,12 @@ def send_alert(title, message, level='warning'):
     print(f"时间: {datetime.now()}")
     print(f"消息: {message}")
     print(f"{'='*60}\n")
+    
+    if EMAIL_ENABLED:
+        try:
+            email_alert.send_alert(title, message, level)
+        except Exception as e:
+            print(f"[错误] 发送邮件失败: {e}")
 
 def monitor():
     print(f"[{datetime.now()}] 开始监控检查...\n")
@@ -131,6 +145,18 @@ def monitor():
         )
     
     print(f"\n[{datetime.now()}] 监控检查完成")
+    
+    if EMAIL_ENABLED and datetime.now().hour == 8:
+        try:
+            stats = {
+                'account': account_health,
+                'login': login_stats,
+                'card': card_stats
+            }
+            email_alert.send_daily_report(stats)
+            print("已发送每日报告邮件")
+        except Exception as e:
+            print(f"发送每日报告失败: {e}")
 
 if __name__ == '__main__':
     monitor()
