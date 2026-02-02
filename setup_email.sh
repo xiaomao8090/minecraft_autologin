@@ -13,7 +13,8 @@ echo "1. 访问 https://myaccount.google.com/security"
 echo "2. 开启两步验证"
 echo "3. 搜索'应用专用密码'"
 echo "4. 选择'邮件'和'其他设备'"
-echo "5. 生成密码（16位，无空格）"
+echo "5. 生成密码（16位，带空格，如：vbhv frum fybq nxig）"
+echo "   注意：复制时可以包含空格，脚本会自动处理"
 echo ""
 echo "================"
 echo ""
@@ -40,10 +41,13 @@ sed -i.bak '/^ALERT_EMAIL_PASSWORD=/d' "$ENV_FILE" 2>/dev/null
 sed -i.bak '/^ALERT_RECEIVER_EMAIL=/d' "$ENV_FILE" 2>/dev/null
 rm -f "$ENV_FILE.bak"
 
+# 移除密码中的空格
+APP_PASSWORD_NO_SPACE=$(echo "$APP_PASSWORD" | tr -d ' ')
+
 # 添加新配置
 echo "" >> "$ENV_FILE"
 echo "ALERT_EMAIL=$SENDER_EMAIL" >> "$ENV_FILE"
-echo "ALERT_EMAIL_PASSWORD=$APP_PASSWORD" >> "$ENV_FILE"
+echo "ALERT_EMAIL_PASSWORD=$APP_PASSWORD_NO_SPACE" >> "$ENV_FILE"
 echo "ALERT_RECEIVER_EMAIL=$RECEIVER_EMAIL" >> "$ENV_FILE"
 
 echo ""
@@ -54,8 +58,11 @@ echo "测试邮件发送..."
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# 移除密码中的空格用于测试
+APP_PASSWORD_NO_SPACE=$(echo "$APP_PASSWORD" | tr -d ' ')
+
 export ALERT_EMAIL="$SENDER_EMAIL"
-export ALERT_EMAIL_PASSWORD="$APP_PASSWORD"
+export ALERT_EMAIL_PASSWORD="$APP_PASSWORD_NO_SPACE"
 export ALERT_RECEIVER_EMAIL="$RECEIVER_EMAIL"
 
 "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/email_alert.py" "测试邮件" "这是一封测试邮件，如果收到说明配置成功！" "info"
