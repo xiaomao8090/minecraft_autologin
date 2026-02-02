@@ -553,10 +553,6 @@ class AutoLoginHTTP:
         
         if result is True:
             print(f"\n[成功] Microsoft 授权完成")
-            print(f"[信息] 等待启动器轮询获取 token...")
-            for i in range(6):
-                time.sleep(1)
-                print(f"  等待中... {i+1}/6 秒")
             print(f"[成功] 登录完成")
             print(f"[成功] 用时: {self.get_elapsed_time()}")
             print(f"[成功] 请检查启动器是否已登录")
@@ -572,10 +568,6 @@ class AutoLoginHTTP:
             verify_result = self.handle_additional_verification(result, password, email)
             if verify_result is True:
                 print(f"\n[成功] Microsoft 授权完成")
-                print(f"[信息] 等待启动器轮询获取 token...")
-                for i in range(6):
-                    time.sleep(1)
-                    print(f"  等待中... {i+1}/6 秒")
                 print(f"[成功] 登录完成")
                 print(f"[成功] 用时: {self.get_elapsed_time()}")
                 print(f"[成功] 请检查启动器是否已登录")
