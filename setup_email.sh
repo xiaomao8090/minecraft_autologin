@@ -29,17 +29,22 @@ fi
 
 ENV_FILE=".env"
 
-if grep -q "ALERT_EMAIL=" "$ENV_FILE" 2>/dev/null; then
-    sed -i.bak "s|^ALERT_EMAIL=.*|ALERT_EMAIL=$SENDER_EMAIL|" "$ENV_FILE"
-    sed -i.bak "s|^ALERT_EMAIL_PASSWORD=.*|ALERT_EMAIL_PASSWORD=$APP_PASSWORD|" "$ENV_FILE"
-    sed -i.bak "s|^ALERT_RECEIVER_EMAIL=.*|ALERT_RECEIVER_EMAIL=$RECEIVER_EMAIL|" "$ENV_FILE"
-    rm -f "$ENV_FILE.bak"
-else
-    echo "" >> "$ENV_FILE"
-    echo "ALERT_EMAIL=$SENDER_EMAIL" >> "$ENV_FILE"
-    echo "ALERT_EMAIL_PASSWORD=$APP_PASSWORD" >> "$ENV_FILE"
-    echo "ALERT_RECEIVER_EMAIL=$RECEIVER_EMAIL" >> "$ENV_FILE"
+# 确保.env文件存在
+if [ ! -f "$ENV_FILE" ]; then
+    touch "$ENV_FILE"
 fi
+
+# 移除可能存在的旧配置
+sed -i.bak '/^ALERT_EMAIL=/d' "$ENV_FILE" 2>/dev/null
+sed -i.bak '/^ALERT_EMAIL_PASSWORD=/d' "$ENV_FILE" 2>/dev/null
+sed -i.bak '/^ALERT_RECEIVER_EMAIL=/d' "$ENV_FILE" 2>/dev/null
+rm -f "$ENV_FILE.bak"
+
+# 添加新配置
+echo "" >> "$ENV_FILE"
+echo "ALERT_EMAIL=$SENDER_EMAIL" >> "$ENV_FILE"
+echo "ALERT_EMAIL_PASSWORD=$APP_PASSWORD" >> "$ENV_FILE"
+echo "ALERT_RECEIVER_EMAIL=$RECEIVER_EMAIL" >> "$ENV_FILE"
 
 echo ""
 echo "配置已保存到 .env 文件"
@@ -48,8 +53,10 @@ echo ""
 echo "测试邮件发送..."
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$ENV_FILE"
-export ALERT_EMAIL ALERT_EMAIL_PASSWORD ALERT_RECEIVER_EMAIL
+
+export ALERT_EMAIL="$SENDER_EMAIL"
+export ALERT_EMAIL_PASSWORD="$APP_PASSWORD"
+export ALERT_RECEIVER_EMAIL="$RECEIVER_EMAIL"
 
 "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/email_alert.py" "测试邮件" "这是一封测试邮件，如果收到说明配置成功！" "info"
 
