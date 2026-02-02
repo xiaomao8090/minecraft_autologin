@@ -11,17 +11,23 @@ class EmailAlert:
         self.smtp_port = 587
         self.sender_email = os.environ.get('ALERT_EMAIL')
         self.sender_password = os.environ.get('ALERT_EMAIL_PASSWORD')
-        self.receiver_email = os.environ.get('ALERT_RECEIVER_EMAIL', self.sender_email)
+        receiver_emails = os.environ.get('ALERT_RECEIVER_EMAIL', self.sender_email)
+        
+        if receiver_emails:
+            self.receiver_emails = [email.strip() for email in receiver_emails.split(',')]
+        else:
+            self.receiver_emails = [self.sender_email]
         
         if not self.sender_email or not self.sender_password:
             raise ValueError("请设置 ALERT_EMAIL 和 ALERT_EMAIL_PASSWORD 环境变量")
     
     def send_alert(self, subject, message, level='warning'):
         try:
-            msg = MIMEMultipart('alternative')
-            msg['From'] = self.sender_email
-            msg['To'] = self.receiver_email
-            msg['Subject'] = f"[{level.upper()}] {subject}"
+            for receiver_email in self.receiver_emails:
+                msg = MIMEMultipart('alternative')
+                msg['From'] = self.sender_email
+                msg['To'] = receiver_email
+                msg['Subject'] = f"[{level.upper()}] {subject}"
             
             level_colors = {
                 'info': '#3b82f6',
@@ -86,7 +92,7 @@ Minecraft Auto Login 监控系统
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
             
-            print(f"[邮件] 已发送告警邮件: {subject}")
+            print(f"[邮件] 已发送告警邮件到 {receiver_email}: {subject}")
             return True
         except Exception as e:
             print(f"[错误] 发送邮件失败: {e}")
@@ -116,6 +122,33 @@ Minecraft Auto Login 监控系统
         """
         
         return self.send_alert(subject, message, 'info')
+    
+    def send_login_success(self, card_key, email, device_code, ip):
+        subject = "用户登录成功"
+        message = f"""有用户成功登录
+
+卡密: {card_key}
+使用账号: {email}
+设备代码: {device_code}
+IP地址: {ip}
+时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        """
+        return self.send_alert(subject, message, 'info')
+    
+    def send_accounts_imported(self, new_count, duplicate_count, password_update_count, error_count, total_lines):
+        subject = "账号导入完成"
+        message = f"""账号导入操作完成
+
+总行数: {total_lines}
+新增账号: {new_count}
+重复账号: {duplicate_count}
+密码更新: {password_update_count}
+错误行数: {error_count}
+
+成功率: {((new_count + password_update_count) / total_lines * 100):.1f}%
+        """
+        level = 'info' if error_count == 0 else 'warning'
+        return self.send_alert(subject, message, level)
 
 if __name__ == '__main__':
     import sys

@@ -21,7 +21,7 @@ echo ""
 read -p "发件人Gmail地址: " SENDER_EMAIL
 read -sp "应用专用密码（16位）: " APP_PASSWORD
 echo ""
-read -p "收件人邮箱（留空则发送给自己）: " RECEIVER_EMAIL
+read -p "收件人邮箱（多个用逗号分隔，留空则发送给自己）: " RECEIVER_EMAIL
 
 if [ -z "$RECEIVER_EMAIL" ]; then
     RECEIVER_EMAIL=$SENDER_EMAIL
@@ -43,6 +43,7 @@ fi
 
 echo ""
 echo "配置已保存到 .env 文件"
+echo "收件人: $RECEIVER_EMAIL"
 echo ""
 echo "测试邮件发送..."
 

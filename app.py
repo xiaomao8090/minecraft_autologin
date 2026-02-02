@@ -172,6 +172,14 @@ def login():
                 db.update_last_used_email(card_key, email)
             db.update_account(email, last_login=datetime.now(), disabled=True)
             db.add_log(ip, 'login', 'success', '登录成功', email=email, device_code=device_code, card_key=card_key, detail_log=detail_log)
+            
+            try:
+                from email_alert import EmailAlert
+                email_alert = EmailAlert()
+                email_alert.send_login_success(card_key or '无卡密', email, device_code, ip)
+            except Exception as e:
+                print(f"[警告] 发送登录成功邮件失败: {e}")
+            
             return jsonify({'success': True, 'message': '登录成功', 'email': email})
         else:
             if card_key:
@@ -359,6 +367,15 @@ def process_account_text(text):
         else:
             error_count += 1
     elapsed_time = time.time() - start_time
+    return jsonify({'success': True, 'new_count': new_count, 'duplicate_count': duplicate_count, 'password_update_count': password_update_count, 'error_count': error_count, 'total_lines': total_lines, 'elapsed_time': round(elapsed_time, 2)})
+
+    try:
+        from email_alert import EmailAlert
+        email_alert = EmailAlert()
+        email_alert.send_accounts_imported(new_count, duplicate_count, password_update_count, error_count, total_lines)
+    except Exception as e:
+        print(f"[警告] 发送账号导入邮件失败: {e}")
+    
     return jsonify({'success': True, 'new_count': new_count, 'duplicate_count': duplicate_count, 'password_update_count': password_update_count, 'error_count': error_count, 'total_lines': total_lines, 'elapsed_time': round(elapsed_time, 2)})
 
 @app.route('/api/accounts/<email>', methods=['DELETE'])
