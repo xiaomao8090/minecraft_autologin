@@ -23,12 +23,6 @@ class EmailAlert:
     
     def send_alert(self, subject, message, level='warning'):
         try:
-            for receiver_email in self.receiver_emails:
-                msg = MIMEMultipart('alternative')
-                msg['From'] = self.sender_email
-                msg['To'] = receiver_email
-                msg['Subject'] = f"[{level.upper()}] {subject}"
-            
             level_colors = {
                 'info': '#3b82f6',
                 'warning': '#f59e0b',
@@ -81,18 +75,25 @@ class EmailAlert:
 Minecraft Auto Login 监控系统
             """
             
-            part1 = MIMEText(text_content, 'plain')
-            part2 = MIMEText(html_content, 'html')
+            for receiver_email in self.receiver_emails:
+                msg = MIMEMultipart('alternative')
+                msg['From'] = self.sender_email
+                msg['To'] = receiver_email
+                msg['Subject'] = f"[{level.upper()}] {subject}"
+                
+                part1 = MIMEText(text_content, 'plain')
+                part2 = MIMEText(html_content, 'html')
+                
+                msg.attach(part1)
+                msg.attach(part2)
+                
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.sender_email, self.sender_password)
+                    server.send_message(msg)
+                
+                print(f"[邮件] 已发送告警邮件到 {receiver_email}: {subject}")
             
-            msg.attach(part1)
-            msg.attach(part2)
-            
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.sender_email, self.sender_password)
-                server.send_message(msg)
-            
-            print(f"[邮件] 已发送告警邮件到 {receiver_email}: {subject}")
             return True
         except Exception as e:
             print(f"[错误] 发送邮件失败: {e}")
